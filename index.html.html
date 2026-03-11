@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- 手機端 APP 圖標設定 (Add to Home Screen) -->
+    <title>課後班點名管理系統</title>
+    
+    <!-- 生成「課後班」字樣的圖標（支援 iOS Safari + Android Chrome） -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2218%22 fill=%22%237c3aed%22/><text x=%2250%22 y=%2254%22 dominant-baseline=%22central%22 text-anchor=%22middle%22 font-family=%22sans-serif%22 font-weight=%22bold%22 font-size=%2232%22 fill=%22white%22>課後班</text></svg>">
+    <script>
+    // 動態生成高解析度圖標 (192x192 + 512x512 PNG)
+    // 同時支援 iOS Safari (apple-touch-icon) 和 Android Chrome (Web App Manifest)
+    (function() {
+        function generateIcon(size) {
+            var canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            var ctx = canvas.getContext('2d');
+            // 填滿整個畫布（iOS 和 Android 會自動裁切圓角）
+            ctx.fillStyle = '#7c3aed';
+            ctx.fillRect(0, 0, size, size);
+            // 文字「課後班」
+            ctx.fillStyle = '#ffffff';
+            var fontSize = Math.round(size * 0.32);
+            ctx.font = 'bold ' + fontSize + 'px "PingFang TC", "Heiti TC", "Noto Sans CJK TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('課後班', size / 2, size / 2 + Math.round(size * 0.02));
+            return canvas.toDataURL('image/png');
+        }
+
+        var icon192 = generateIcon(192);
+        var icon512 = generateIcon(512);
+
+        // 設定 apple-touch-icon（iOS Safari「加入主畫面」用）
+        var appleLink = document.createElement('link');
+        appleLink.rel = 'apple-touch-icon';
+        appleLink.sizes = '180x180';
+        appleLink.href = icon192;
+        document.head.appendChild(appleLink);
+
+        // 設定 Web App Manifest（Android Chrome「新增至主畫面」用）
+        var manifest = {
+            name: '課後班點名管理系統',
+            short_name: '課後班',
+            start_url: '.',
+            display: 'standalone',
+            background_color: '#7c3aed',
+            theme_color: '#7c3aed',
+            icons: [
+                { src: icon192, sizes: '192x192', type: 'image/png' },
+                { src: icon512, sizes: '512x512', type: 'image/png' }
+            ]
+        };
+        var manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+        var manifestUrl = URL.createObjectURL(manifestBlob);
+        var manifestLink = document.createElement('link');
+        manifestLink.rel = 'manifest';
+        manifestLink.href = manifestUrl;
+        document.head.appendChild(manifestLink);
+
+        // 設定 theme-color（Android Chrome 狀態列顏色）
+        var themeMeta = document.createElement('meta');
+        themeMeta.name = 'theme-color';
+        themeMeta.content = '#7c3aed';
+        document.head.appendChild(themeMeta);
+    })();
+    </script>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        /* 基礎樣式設定 */
+        body { font-family: "標楷體", "DFKai-SB", serif; background-color: #f3f4f6; }
+        .active-tab { border-bottom: 4px solid #7c3aed; color: #7c3aed; font-weight: bold; }
+        .hidden { display: none; }
+        
+        /* 視覺設定 */
+        .login-card { border-top: 8px solid #7c3aed; }
+        .title-purple { color: #6b21a8; }
+        .title-bright-blue { color: #4A4AFF; } 
+        
+        .status-btn { transition: all 0.2s; border: 2px solid transparent; }
+        .status-btn.active-arrive { background-color: #10b981; color: white; border-color: #059669; transform: scale(1.05); }
+        .status-btn.active-club { background-color: #3b82f6; color: white; border-color: #2563eb; transform: scale(1.05); }
+        .status-btn.active-leave { background-color: #f59e0b; color: white; border-color: #d97706; transform: scale(1.05); }
+        .status-btn.active-absent { background-color: #ef4444; color: white; border-color: #dc2626; transform: scale(1.05); }
+        
+        .container-max { max-width: 1200px; margin: 0 auto; }
+        .nav-scroll::-webkit-scrollbar { height: 4px; }
+        .nav-scroll::-webkit-scrollbar-thumb { background: #ddd; border-radius: 10px; }
+
+        /* 公告事項樣式 */
+        .announcement-card {
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .announcement-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .announcement-file-preview {
+            max-width: 100%;
+            max-height: 600px;
+            border-radius: 8px;
+        }
+        .announcement-modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .announcement-modal-content {
+            background: white;
+            border-radius: 16px;
+            max-width: 90vw;
+            max-height: 90vh;
+            overflow: auto;
+            padding: 24px;
+            position: relative;
+        }
+        .announcement-modal-close {
+            position: absolute;
+            top: 12px;
+            right: 16px;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+            background: #f3f4f6;
+            border: none;
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .announcement-modal-close:hover {
+            background: #e5e7eb;
+            color: #333;
+        }
+    </style>
+</head>
+<body class="p-2 md:p-6">
+
+    <div id="app" class="container-max">
+        <!-- 訊息提示元件 -->
+        <div id="messageBox" class="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 px-6 py-3 rounded-lg shadow-xl hidden text-center min-w-[300px]"></div>
+
+        <!-- 公告預覽 Modal -->
+        <div id="announcementModal" class="announcement-modal-overlay hidden" onclick="closeAnnouncementModal(event)">
+            <div class="announcement-modal-content" onclick="event.stopPropagation()">
+                <button class="announcement-modal-close" onclick="closeAnnouncementModal()">&times;</button>
+                <div id="announcementModalBody"></div>
+            </div>
+        </div>
+
+        <!-- 登入介面 -->
+        <div id="loginSection" class="flex items-center justify-center min-h-screen">
+            <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md login-card">
+                <div class="text-center mb-8">
+                    <h1 class="text-xl font-bold title-purple">新北市長安國小</h1>
+                    <h2 class="text-3xl font-extrabold title-bright-blue mt-1">課後班點名管理系統</h2>
+                </div>
+                <div class="space-y-6">
+                    <div>
+                        <label class="block text-xl font-black text-black mb-2">老師姓名</label>
+                        <input type="text" id="loginTeacherInput" placeholder="請輸入您的姓名" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-lg">
+                    </div>
+                    <button id="btnLogin" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-lg transition duration-200 text-lg shadow-lg">登入系統</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 主管理介面 -->
+        <div id="mainSection" class="hidden space-y-4">
+            <div class="bg-white rounded-xl shadow-md p-4 flex flex-wrap justify-between items-center gap-4">
+                <div class="flex items-center space-x-2">
+                    <span class="text-xl font-bold title-purple">歡迎, <span id="displayTeacherName"></span> 老師</span>
+                </div>
+                <div class="flex space-x-1 overflow-x-auto nav-scroll">
+                    <button id="btnTabAttendance" class="px-4 py-2 active-tab whitespace-nowrap">即時點名</button>
+                    <button id="btnTabStudents" class="px-4 py-2 whitespace-nowrap">學生資訊</button>
+                    <button id="btnTabHistory" class="px-4 py-2 whitespace-nowrap">歷史記錄</button>
+                    <button id="btnTabAnnouncement" class="px-4 py-2 whitespace-nowrap">公告事項</button>
+                    <button id="btnTabAdmin" class="hidden px-4 py-2 whitespace-nowrap">系統管理</button>
+                    <button id="btnLogout" class="px-4 py-2 text-red-600 font-bold ml-4 whitespace-nowrap">登出</button>
+                </div>
+            </div>
+
+            <!-- 分頁：即時點名 -->
+            <div id="attendancePage" class="bg-white rounded-xl shadow-md p-6">
+                <div class="flex justify-between items-center mb-4 border-l-4 border-purple-600 pl-3">
+                    <h3 class="text-xl font-bold">即時點名作業</h3>
+                    <span id="adminBadge" class="hidden bg-red-100 text-red-600 text-xs px-2 py-1 rounded-full font-bold">管理員權限</span>
+                </div>
+                <div class="mb-6">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">選擇上課班級</label>
+                    <select id="classSelect" class="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-purple-500 outline-none">
+                        <option value="">載入班級資料中...</option>
+                    </select>
+                </div>
+                <div id="studentListArea" class="space-y-4">
+                    <p class="text-center text-gray-500 py-10">請先選擇班級以載入名單</p>
+                </div>
+                <div id="submitArea" class="mt-8 hidden">
+                    <button id="btnSubmitAttendance" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl shadow-lg transition duration-200 text-xl">提交點名資料</button>
+                </div>
+            </div>
+
+            <!-- 分頁：學生資訊 -->
+            <div id="studentsPage" class="hidden bg-white rounded-xl shadow-md p-6">
+                <h3 class="text-xl font-bold mb-4 border-l-4 border-blue-600 pl-3">學生通訊資訊</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">按班級篩選</label>
+                        <select id="studentInfoClassSelect" class="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none">
+                            <option value="">-- 請選擇班級 --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">快速搜尋學生姓名</label>
+                        <input type="text" id="studentSearchInput" placeholder="輸入姓名(如: 王小明)" class="w-full p-3 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                </div>
+                <div id="studentContactArea" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <p class="text-center text-gray-500 py-10 col-span-full">請選擇班級或輸入姓名搜尋學生資訊</p>
+                </div>
+            </div>
+
+            <!-- 分頁：歷史記錄 -->
+            <div id="historyPage" class="hidden bg-white rounded-xl shadow-md p-6">
+                <h3 class="text-xl font-bold mb-4 border-l-4 border-yellow-600 pl-3">點名記錄查詢</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                    <div>
+                        <label class="block text-sm font-bold mb-2">選擇班級</label>
+                        <select id="historyClassSelect" class="w-full p-3 border rounded-lg bg-gray-50">
+                            <option value="">-- 所有管理班級 --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold mb-2">篩選範圍</label>
+                        <select id="historyRangeSelect" class="w-full p-3 border rounded-lg bg-gray-50">
+                            <option value="today">今天</option>
+                            <option value="week">最近一周</option>
+                            <option value="month">最近一月</option>
+                            <option value="custom">自訂區間</option>
+                        </select>
+                    </div>
+                    <div id="customDateRange" class="hidden lg:col-span-1 space-y-2">
+                        <label class="block text-sm font-bold mb-2">區間設定 (起/訖)</label>
+                        <div class="flex gap-2">
+                            <input type="date" id="historyStartDate" class="w-1/2 p-2 border rounded text-xs">
+                            <input type="date" id="historyEndDate" class="w-1/2 p-2 border rounded text-xs">
+                        </div>
+                    </div>
+                    <div class="flex items-end">
+                        <button id="btnQueryHistory" class="w-full bg-purple-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-purple-700 transition">查詢紀錄</button>
+                    </div>
+                </div>
+                <div id="historyListArea" class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead>
+                            <tr class="bg-gray-100">
+                                <th class="p-3 border">日期</th>
+                                <th class="p-3 border">班級</th>
+                                <th class="p-3 border">點名老師</th>
+                                <th class="p-3 border">記錄詳情</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTableBody">
+                            <tr><td colspan="4" class="p-10 text-center text-gray-400">點擊上方按鈕開始查詢</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 分頁：公告事項 -->
+            <div id="announcementPage" class="hidden bg-white rounded-xl shadow-md p-6">
+                <h3 class="text-xl font-bold mb-4 border-l-4 border-orange-500 pl-3">公告事項</h3>
+                <div id="announcementListArea">
+                    <p class="text-center text-gray-500 py-10">載入公告中...</p>
+                </div>
+            </div>
+
+            <!-- 分頁：系統管理 -->
+            <div id="adminPage" class="hidden bg-white rounded-xl shadow-md p-6">
+                <h3 class="text-xl font-bold mb-4 border-l-4 border-red-600 pl-3">系統後台管理</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div class="border-2 border-dashed border-purple-200 p-6 rounded-xl text-center">
+                        <h4 class="text-lg font-bold mb-4 text-purple-700">匯入老師課表</h4>
+                        <input type="file" id="teacherFile" accept=".xlsx, .xls" class="hidden">
+                        <button id="btnImportTeacher" onclick="document.getElementById('teacherFile').click()" class="bg-purple-100 text-purple-700 px-6 py-3 rounded-lg font-bold hover:bg-purple-200 w-full mb-2 transition-all">選擇 Excel 檔案</button>
+                    </div>
+                    <div class="border-2 border-dashed border-green-200 p-6 rounded-xl text-center">
+                        <h4 class="text-lg font-bold mb-4 text-green-700">匯入學生名單</h4>
+                        <input type="file" id="studentFile" accept=".xlsx, .xls" class="hidden">
+                        <button id="btnImportStudent" onclick="document.getElementById('studentFile').click()" class="bg-green-100 text-green-700 px-6 py-3 rounded-lg font-bold hover:bg-green-200 w-full mb-2 transition-all">選擇 Excel 檔案</button>
+                    </div>
+                    <div class="border-2 border-dashed border-orange-200 p-6 rounded-xl text-center">
+                        <h4 class="text-lg font-bold mb-4 text-orange-700">匯入公告事項</h4>
+                        <p class="text-xs text-gray-500 mb-3">支援 PDF、JPG 格式</p>
+                        <input type="file" id="announcementFile" accept=".pdf,.jpg,.jpeg" class="hidden">
+                        <button id="btnImportAnnouncement" onclick="document.getElementById('announcementFile').click()" class="bg-orange-100 text-orange-700 px-6 py-3 rounded-lg font-bold hover:bg-orange-200 w-full mb-2 transition-all">選擇檔案 (PDF/JPG)</button>
+                        <div id="announcementUploadInfo" class="mt-3 text-sm text-gray-500"></div>
+                        <!-- 公告標題輸入 -->
+                        <div id="announcementTitleArea" class="hidden mt-4">
+                            <input type="text" id="announcementTitleInput" placeholder="請輸入公告標題" class="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-orange-500 outline-none mb-3">
+                            <button id="btnConfirmAnnouncement" class="bg-orange-500 text-white px-6 py-3 rounded-lg font-bold hover:bg-orange-600 w-full transition-all">確認上傳公告</button>
+                        </div>
+                        <!-- 已上傳公告管理 -->
+                        <div class="mt-6 text-left">
+                            <h5 class="text-sm font-bold text-gray-600 mb-2">已上傳公告列表</h5>
+                            <div id="adminAnnouncementList" class="space-y-2 max-h-60 overflow-y-auto">
+                                <p class="text-xs text-gray-400 text-center">載入中...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, query, getDocs, addDoc, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Firebase Configuration (保持原樣)
+        const firebaseConfig = {
+            apiKey: "AIzaSyDM14sZDvtCqK0vJEpYzK_sZaVF_dR1u4Q",
+            authDomain: "cn-ams.firebaseapp.com",
+            projectId: "cn-ams",
+            storageBucket: "cn-ams.firebasestorage.app",
+            messagingSenderId: "308009112437",
+            appId: "1:308009112437:web:319fe0ec78975c34c4b93c"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'cn-ams-school';
+
+        let user = null;
+        let allTeachersData = [];
+        let allStudentsData = {};
+        let currentAttendanceRecords = {}; 
+        let globalHistoryLogs = [];
+        let allAnnouncements = [];
+        let pendingAnnouncementFile = null; // 暫存待上傳的公告檔案
+
+        const showMessage = (msg, type = "success") => {
+            const box = document.getElementById('messageBox');
+            box.innerText = msg;
+            box.className = `fixed top-4 left-1/2 transform -translate-x-1/2 z-50 px-6 py-3 rounded-lg shadow-xl text-white font-bold ${type === 'success' ? 'bg-green-600' : 'bg-red-600'}`;
+            box.classList.remove('hidden');
+            setTimeout(() => box.classList.add('hidden'), 3000);
+        };
+
+        const cleanStr = (str) => {
+            if (!str) return "";
+            return str.toString().trim().replace(/[\s\u3000]/g, '').replace(/班$/, '');
+        };
+
+        // ===== 公告事項相關函式 =====
+
+        // 將檔案轉為 Base64
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // 載入公告列表
+        async function loadAnnouncements() {
+            if (!auth.currentUser) return;
+            try {
+                const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'announcements'));
+                allAnnouncements = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                allAnnouncements.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+                renderAnnouncementList();
+                renderAdminAnnouncementList();
+            } catch (err) {
+                console.error("載入公告失敗:", err);
+            }
+        }
+
+        // 渲染公告列表（公告事項分頁）
+        function renderAnnouncementList() {
+            const area = document.getElementById('announcementListArea');
+            if (allAnnouncements.length === 0) {
+                area.innerHTML = '<p class="text-center text-gray-500 py-10">目前沒有公告</p>';
+                return;
+            }
+            area.innerHTML = allAnnouncements.map((a, idx) => {
+                const dateStr = a.createdAt ? new Date(a.createdAt.seconds * 1000).toLocaleDateString('zh-TW') : '未知日期';
+                const fileType = a.fileType || '';
+                const isImage = fileType.startsWith('image/');
+                const isPdf = fileType === 'application/pdf';
+                const typeLabel = isImage ? '圖片' : (isPdf ? 'PDF' : '檔案');
+                const typeColor = isImage ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700';
+                return `
+                    <div class="announcement-card bg-orange-50 p-5 rounded-xl border border-orange-100 shadow-sm mb-4" onclick="viewAnnouncement(${idx})">
+                        <div class="flex justify-between items-start mb-2">
+                            <div class="flex-1">
+                                <h4 class="text-lg font-bold text-orange-900">${a.title || '未命名公告'}</h4>
+                                <div class="flex items-center gap-2 mt-1">
+                                    <span class="text-xs text-gray-500">${dateStr}</span>
+                                    <span class="text-xs ${typeColor} px-2 py-0.5 rounded-full font-bold">${typeLabel}</span>
+                                    <span class="text-xs text-gray-400">${a.fileName || ''}</span>
+                                </div>
+                            </div>
+                            <span class="text-orange-400 text-2xl ml-3">📋</span>
+                        </div>
+                        ${isImage ? `<div class="mt-3"><img src="${a.fileData}" class="max-h-48 rounded-lg border border-orange-200 object-contain" alt="${a.title}"></div>` : ''}
+                        <p class="text-sm text-orange-600 mt-2 font-bold">點擊查看完整內容 →</p>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // 渲染管理員公告列表（系統管理分頁）
+        function renderAdminAnnouncementList() {
+            const area = document.getElementById('adminAnnouncementList');
+            if (allAnnouncements.length === 0) {
+                area.innerHTML = '<p class="text-xs text-gray-400 text-center">尚無公告</p>';
+                return;
+            }
+            area.innerHTML = allAnnouncements.map((a, idx) => {
+                const dateStr = a.createdAt ? new Date(a.createdAt.seconds * 1000).toLocaleDateString('zh-TW') : '';
+                return `
+                    <div class="flex items-center justify-between bg-gray-50 p-2 rounded-lg border text-xs">
+                        <div class="flex-1 truncate">
+                            <span class="font-bold text-gray-700">${a.title || '未命名'}</span>
+                            <span class="text-gray-400 ml-2">${dateStr}</span>
+                        </div>
+                        <button onclick="deleteAnnouncement('${a.id}', event)" class="text-red-500 hover:text-red-700 font-bold ml-2 px-2 py-1 rounded hover:bg-red-50 transition">刪除</button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // 查看公告詳情（Modal）
+        window.viewAnnouncement = (idx) => {
+            const a = allAnnouncements[idx];
+            if (!a) return;
+            const modal = document.getElementById('announcementModal');
+            const body = document.getElementById('announcementModalBody');
+            const dateStr = a.createdAt ? new Date(a.createdAt.seconds * 1000).toLocaleDateString('zh-TW') + ' ' + new Date(a.createdAt.seconds * 1000).toLocaleTimeString('zh-TW') : '';
+            const isImage = (a.fileType || '').startsWith('image/');
+            const isPdf = (a.fileType || '') === 'application/pdf';
+
+            let contentHtml = '';
+            if (isImage) {
+                contentHtml = `<img src="${a.fileData}" class="announcement-file-preview mx-auto" alt="${a.title}">`;
+            } else if (isPdf) {
+                contentHtml = `<iframe src="${a.fileData}" class="w-full" style="height:75vh; border-radius:8px; border:1px solid #e5e7eb;"></iframe>`;
+            } else {
+                contentHtml = `<p class="text-gray-500">無法預覽此檔案格式</p>`;
+            }
+
+            body.innerHTML = `
+                <div class="pr-8">
+                    <h3 class="text-2xl font-bold text-orange-900 mb-1">${a.title || '未命名公告'}</h3>
+                    <div class="flex items-center gap-3 mb-4">
+                        <span class="text-sm text-gray-500">${dateStr}</span>
+                        <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">${a.fileName || ''}</span>
+                    </div>
+                    <div class="mt-2">${contentHtml}</div>
+                </div>
+            `;
+            modal.classList.remove('hidden');
+        };
+
+        // 關閉公告 Modal
+        window.closeAnnouncementModal = (event) => {
+            if (event && event.target !== event.currentTarget) return;
+            document.getElementById('announcementModal').classList.add('hidden');
+        };
+
+        // 刪除公告
+        window.deleteAnnouncement = async (docId, event) => {
+            if (event) event.stopPropagation();
+            if (!confirm('確定要刪除此公告嗎？')) return;
+            try {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'announcements', docId));
+                showMessage('公告已刪除');
+                await loadAnnouncements();
+            } catch (err) {
+                console.error(err);
+                showMessage('刪除失敗', 'error');
+            }
+        };
+
+        // ===== 原有功能 =====
+
+        async function refreshData() {
+            if (!auth.currentUser) return;
+            try {
+                const tSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'teachers'));
+                allTeachersData = tSnap.docs.map(doc => doc.data());
+                
+                const sSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'students'));
+                allStudentsData = {};
+                sSnap.docs.forEach(doc => {
+                    const data = doc.data();
+                    allStudentsData[cleanStr(data.className)] = { originalName: data.className, students: data.students };
+                });
+                
+                const currentTeacher = localStorage.getItem('currentTeacher');
+                if (currentTeacher) refreshClassDropdowns(currentTeacher);
+
+                // 同時載入公告
+                await loadAnnouncements();
+            } catch (error) { 
+                console.error("同步失敗:", error); 
+            }
+        }
+
+        function refreshClassDropdowns(teacherName) {
+            const selectAtt = document.getElementById('classSelect');
+            const selectInfo = document.getElementById('studentInfoClassSelect');
+            const selectHist = document.getElementById('historyClassSelect');
+            const adminBadge = document.getElementById('adminBadge');
+            const btnAdmin = document.getElementById('btnTabAdmin');
+            
+            const teacherSearchKey = cleanStr(teacherName);
+            let myClasses = [];
+            let isAdmin = (teacherSearchKey === "管理員");
+
+            if (isAdmin) {
+                myClasses = Object.keys(allStudentsData).map(key => allStudentsData[key].originalName).sort();
+                adminBadge.classList.remove('hidden');
+                btnAdmin.classList.remove('hidden'); 
+            } else {
+                allTeachersData.forEach(t => {
+                    const nameInDb = cleanStr(t.teacherName || t.老師姓名 || t.老師 || '');
+                    if (nameInDb === teacherSearchKey) {
+                        const rawClassName = (t.className || t.上課班級 || t.班級 || '').toString();
+                        const splitClasses = rawClassName.split(/[藍,，、\s]+/).filter(c => c.trim());
+                        splitClasses.forEach(cls => {
+                            const cKey = cleanStr(cls);
+                            for (let dbClassKey in allStudentsData) {
+                                if (dbClassKey === cKey || dbClassKey.includes(cKey) || cKey.includes(dbClassKey)) {
+                                    myClasses.push(allStudentsData[dbClassKey].originalName);
+                                }
+                            }
+                        });
+                    }
+                });
+                myClasses = [...new Set(myClasses)].sort();
+                adminBadge.classList.add('hidden');
+                btnAdmin.classList.add('hidden'); 
+            }
+
+            selectAtt.innerHTML = `<option value="">-- 請選擇班級 --</option>`;
+            myClasses.forEach(cls => selectAtt.add(new Option(cls, cls)));
+
+            selectInfo.innerHTML = `<option value="">-- 請選擇班級 --</option>`;
+            if (isAdmin) selectInfo.add(new Option("-- 顯示所有班級學生 --", "ALL_CLASSES"));
+            myClasses.forEach(cls => selectInfo.add(new Option(cls, cls)));
+
+            selectHist.innerHTML = `<option value="">-- 所有管理班級 --</option>`;
+            myClasses.forEach(cls => selectHist.add(new Option(cls, cls)));
+        }
+
+        window.setStatus = (idx, status, btn) => {
+            currentAttendanceRecords[idx] = status;
+            const container = btn.parentElement;
+            container.querySelectorAll('button').forEach(b => {
+                b.className = b.className.replace(/active-(arrive|club|leave|absent)/g, '').trim();
+                b.classList.add('bg-gray-100', 'text-gray-500');
+            });
+            btn.classList.remove('bg-gray-100', 'text-gray-500');
+            const activeMap = { '到班': 'arrive', '社團/學輔': 'club', '請假': 'leave', '缺席': 'absent' };
+            btn.classList.add(`active-${activeMap[status]}`);
+        };
+
+        document.getElementById('classSelect').onchange = (e) => {
+            const className = e.target.value;
+            const area = document.getElementById('studentListArea');
+            const submitArea = document.getElementById('submitArea');
+            currentAttendanceRecords = {}; 
+            if (!className) {
+                area.innerHTML = '<p class="text-center text-gray-500 py-10">請先選擇班級以載入名單</p>';
+                submitArea.classList.add('hidden');
+                return;
+            }
+            const data = allStudentsData[cleanStr(className)];
+            const students = data ? data.students : [];
+            if (students.length === 0) {
+                area.innerHTML = '<p class="text-center text-red-500 py-10">查無學生名單</p>';
+                submitArea.classList.add('hidden');
+                return;
+            }
+            area.innerHTML = students.map((s, idx) => {
+                const note = s.備註 || s.註記 || '';
+                currentAttendanceRecords[idx] = '到班';
+                return `
+                <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div class="flex-1">
+                            <div class="font-bold text-xl text-gray-800">${s.學生姓名 || s.姓名}</div>
+                            <div class="flex flex-wrap items-center gap-2 mt-1">
+                                <span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold">原始：${s.班級 || '未填'}</span>
+                                ${note ? `<span class="text-xs text-red-600 font-bold">※ ${note}</span>` : ''}
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 sm:flex sm:flex-nowrap gap-2">
+                            <button onclick="setStatus(${idx}, '到班', this)" class="status-btn px-3 py-2 rounded-lg active-arrive font-bold text-sm">到班</button>
+                            <button onclick="setStatus(${idx}, '社團/學輔', this)" class="status-btn px-3 py-2 rounded-lg bg-gray-100 text-gray-500 font-bold text-sm">社團/學輔</button>
+                            <button onclick="setStatus(${idx}, '請假', this)" class="status-btn px-3 py-2 rounded-lg bg-gray-100 text-gray-500 font-bold text-sm">請假</button>
+                            <button onclick="setStatus(${idx}, '缺席', this)" class="status-btn px-3 py-2 rounded-lg bg-gray-100 text-gray-500 font-bold text-sm">缺席</button>
+                        </div>
+                    </div>
+                </div>
+            `}).join('');
+            submitArea.classList.remove('hidden');
+        };
+
+        const studentInfoClassSelect = document.getElementById('studentInfoClassSelect');
+        const studentSearchInput = document.getElementById('studentSearchInput');
+        const studentContactArea = document.getElementById('studentContactArea');
+
+        const updateStudentInfoDisplay = () => {
+            const className = studentInfoClassSelect.value;
+            const searchTerm = studentSearchInput.value.trim();
+            let result = [];
+
+            if (className === "ALL_CLASSES") {
+                Object.keys(allStudentsData).forEach(key => {
+                    const cls = allStudentsData[key];
+                    cls.students.forEach(s => result.push({...s, _fromClass: cls.originalName}));
+                });
+            } else if (className) {
+                const cls = allStudentsData[cleanStr(className)];
+                if (cls) cls.students.forEach(s => result.push({...s, _fromClass: cls.originalName}));
+            } else if (searchTerm) {
+                const myAllowedClasses = Array.from(studentInfoClassSelect.options).map(o => o.value).filter(v => v && v !== "ALL_CLASSES");
+                myAllowedClasses.forEach(cName => {
+                    const cls = allStudentsData[cleanStr(cName)];
+                    if (cls) cls.students.forEach(s => result.push({...s, _fromClass: cls.originalName}));
+                });
+            } else {
+                studentContactArea.innerHTML = '<p class="text-center text-gray-500 py-10 col-span-full">請選擇班級或輸入姓名搜尋學生資訊</p>';
+                return;
+            }
+
+            if (searchTerm) {
+                result = result.filter(s => (s.學生姓名 || s.姓名 || "").toString().includes(searchTerm));
+            }
+
+            if (result.length === 0) {
+                studentContactArea.innerHTML = '<p class="text-center text-red-500 py-10 col-span-full">查無學生資訊</p>';
+                return;
+            }
+            studentContactArea.innerHTML = result.map(s => {
+                const phone = s.聯絡電話 || s.電話 || s.家長電話 || '未提供';
+                const village = s.放學里別 || s.里別 || '未註記';
+                return `
+                    <div class="bg-blue-50 p-4 rounded-xl border border-blue-100 shadow-sm">
+                        <div class="flex justify-between items-start">
+                            <div class="font-bold text-lg text-blue-900">${s.學生姓名 || s.姓名} <span class="text-xs font-normal text-gray-500">(${s._fromClass || ''})</span></div>
+                            <span class="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full font-bold">里：${village}</span>
+                        </div>
+                        <div class="bg-white p-3 rounded-lg border border-blue-100 mt-2">
+                            <div class="text-xs text-gray-400 font-bold mb-1">聯絡電話</div>
+                            <div class="text-xl font-black text-blue-700">${phone}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        };
+        studentInfoClassSelect.onchange = updateStudentInfoDisplay;
+        studentSearchInput.oninput = updateStudentInfoDisplay;
+
+        document.getElementById('historyRangeSelect').onchange = (e) => {
+            document.getElementById('customDateRange').classList.toggle('hidden', e.target.value !== 'custom');
+        };
+
+        window.downloadRecordExcel = (logIndex) => {
+            const log = globalHistoryLogs[logIndex];
+            if (!log) return;
+            const excelData = log.records.map(r => ({
+                "學生姓名": r.name,
+                "點名狀態": r.status,
+                "日期": log.date,
+                "上課班級": log.className,
+                "點名老師": log.teacher
+            }));
+            const worksheet = XLSX.utils.json_to_sheet(excelData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "點名紀錄");
+            XLSX.writeFile(workbook, `${log.date}_${log.className}_點名記錄.xlsx`);
+        };
+
+        document.getElementById('btnQueryHistory').onclick = async () => {
+            if (!auth.currentUser) return;
+            const histClass = document.getElementById('historyClassSelect').value;
+            const range = document.getElementById('historyRangeSelect').value;
+            const tableBody = document.getElementById('historyTableBody');
+            const currentTeacher = localStorage.getItem('currentTeacher');
+            const isSystemAdmin = (cleanStr(currentTeacher) === "管理員");
+            
+            tableBody.innerHTML = '<tr><td colspan="4" class="p-10 text-center">查詢中...</td></tr>';
+            
+            try {
+                const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'history'));
+                const snap = await getDocs(q);
+                let logs = snap.docs.map(doc => doc.data());
+                
+                if (!isSystemAdmin) {
+                    const myAllowedClasses = Array.from(document.getElementById('historyClassSelect').options).map(o => o.value).filter(v => v);
+                    logs = logs.filter(l => {
+                        const isMyRecord = cleanStr(l.teacher) === cleanStr(currentTeacher);
+                        const isMyClass = myAllowedClasses.includes(l.className);
+                        const isSelectedClass = histClass ? (l.className === histClass) : true;
+                        return isMyRecord && isMyClass && isSelectedClass;
+                    });
+                } else if (histClass) {
+                    logs = logs.filter(l => l.className === histClass);
+                }
+
+                const now = new Date();
+                if (range === 'today') {
+                    const todayStr = now.toLocaleDateString('zh-TW');
+                    logs = logs.filter(l => l.date === todayStr);
+                } else if (range === 'week') {
+                    const lastWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                    logs = logs.filter(l => new Date(l.date) >= lastWeek);
+                } else if (range === 'month') {
+                    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+                    logs = logs.filter(l => new Date(l.date) >= lastMonth);
+                } else if (range === 'custom') {
+                    const startInput = document.getElementById('historyStartDate').value;
+                    const endInput = document.getElementById('historyEndDate').value;
+                    if (startInput && endInput) {
+                        const start = new Date(startInput);
+                        const end = new Date(endInput);
+                        end.setHours(23, 59, 59, 999);
+                        logs = logs.filter(l => {
+                            const d = new Date(l.date);
+                            return d >= start && d <= end;
+                        });
+                    }
+                }
+
+                logs.sort((a, b) => b.timestamp - a.timestamp);
+                globalHistoryLogs = logs;
+
+                if (logs.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="4" class="p-10 text-center text-gray-400">查無記錄</td></tr>';
+                    return;
+                }
+
+                tableBody.innerHTML = logs.map((l, idx) => `
+                    <tr class="border-b hover:bg-gray-50">
+                        <td class="p-3 border">${l.date}</td>
+                        <td class="p-3 border font-bold text-purple-700">${l.className}</td>
+                        <td class="p-3 border">${l.teacher}</td>
+                        <td class="p-3 border">
+                            <div class="flex flex-col gap-2">
+                                <details class="cursor-pointer">
+                                    <summary class="text-blue-600 font-bold hover:underline">查看狀態</summary>
+                                    <div class="mt-2 text-xs grid grid-cols-2 gap-1 bg-gray-50 p-2 rounded max-h-40 overflow-y-auto">
+                                        ${l.records.map(r => `<div>${r.name}: <span class="${r.status === '到班' ? 'text-green-600' : 'text-red-500'} font-bold">${r.status}</span></div>`).join('')}
+                                    </div>
+                                </details>
+                                <button onclick="downloadRecordExcel(${idx})" class="text-xs bg-green-50 text-green-700 border border-green-200 px-2 py-1 rounded font-bold hover:bg-green-100 self-start">下載 Excel</button>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (err) { 
+                console.error(err);
+                showMessage("查詢失敗", "error"); 
+            }
+        };
+
+        const processImport = async (file, type) => {
+            if (!auth.currentUser) return;
+            const btn = document.getElementById(type === 'teachers' ? 'btnImportTeacher' : 'btnImportStudent');
+            const originalText = btn.innerText;
+            btn.innerText = "處理中..."; btn.disabled = true;
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    if (type === 'teachers') {
+                        const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                        const old = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'teachers'));
+                        for (const d of old.docs) await deleteDoc(d.ref);
+                        for (const item of json) await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'teachers'), item);
+                    } else {
+                        const old = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'students'));
+                        for (const d of old.docs) await deleteDoc(d.ref);
+                        for (const name of workbook.SheetNames) {
+                            const json = XLSX.utils.sheet_to_json(workbook.Sheets[name]);
+                            if (json.length > 0) await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'students'), { className: name, students: json, updateAt: serverTimestamp() });
+                        }
+                    }
+                    await refreshData();
+                    showMessage("匯入成功");
+                } catch (err) { 
+                    console.error(err);
+                    showMessage("匯入失敗，請確認檔案格式", "error"); 
+                }
+                finally { btn.innerText = originalText; btn.disabled = false; }
+            };
+            reader.readAsArrayBuffer(file);
+        };
+
+        document.getElementById('btnSubmitAttendance').onclick = async () => {
+            if (!auth.currentUser) return;
+            const className = document.getElementById('classSelect').value;
+            const data = allStudentsData[cleanStr(className)];
+            const students = data ? data.students : [];
+            const records = students.map((s, idx) => ({ name: s.學生姓名 || s.姓名, status: currentAttendanceRecords[idx] || '到班' }));
+            try {
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'history'), {
+                    date: new Date().toLocaleDateString('zh-TW'),
+                    className: className,
+                    teacher: localStorage.getItem('currentTeacher'),
+                    records: records,
+                    timestamp: serverTimestamp()
+                });
+                showMessage("點名資料已提交");
+                document.getElementById('classSelect').value = "";
+                document.getElementById('studentListArea').innerHTML = '<p class="text-center text-gray-500 py-10">點名完成！</p>';
+                document.getElementById('submitArea').classList.add('hidden');
+            } catch (err) { 
+                console.error(err);
+                showMessage("提交失敗", "error"); 
+            }
+        };
+
+        // ===== 公告匯入處理 =====
+        document.getElementById('announcementFile').onchange = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const validTypes = ['application/pdf', 'image/jpeg', 'image/jpg'];
+            if (!validTypes.includes(file.type) && !file.name.toLowerCase().endsWith('.jpg') && !file.name.toLowerCase().endsWith('.jpeg') && !file.name.toLowerCase().endsWith('.pdf')) {
+                showMessage('僅支援 PDF 及 JPG 格式', 'error');
+                e.target.value = '';
+                return;
+            }
+            // 檢查檔案大小（限制 5MB，因為 Firestore 文件大小限制）
+            if (file.size > 5 * 1024 * 1024) {
+                showMessage('檔案大小不可超過 5MB', 'error');
+                e.target.value = '';
+                return;
+            }
+            pendingAnnouncementFile = file;
+            const infoArea = document.getElementById('announcementUploadInfo');
+            infoArea.innerHTML = `<span class="text-green-600 font-bold">已選擇: ${file.name} (${(file.size / 1024).toFixed(1)} KB)</span>`;
+            document.getElementById('announcementTitleArea').classList.remove('hidden');
+            // 預設標題為檔名（去掉副檔名）
+            const defaultTitle = file.name.replace(/\.[^/.]+$/, '');
+            document.getElementById('announcementTitleInput').value = defaultTitle;
+        };
+
+        document.getElementById('btnConfirmAnnouncement').onclick = async () => {
+            if (!auth.currentUser || !pendingAnnouncementFile) {
+                showMessage('請先選擇檔案', 'error');
+                return;
+            }
+            const title = document.getElementById('announcementTitleInput').value.trim();
+            if (!title) {
+                showMessage('請輸入公告標題', 'error');
+                return;
+            }
+            const btn = document.getElementById('btnConfirmAnnouncement');
+            btn.innerText = '上傳中...';
+            btn.disabled = true;
+            try {
+                const base64Data = await fileToBase64(pendingAnnouncementFile);
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'announcements'), {
+                    title: title,
+                    fileName: pendingAnnouncementFile.name,
+                    fileType: pendingAnnouncementFile.type,
+                    fileData: base64Data,
+                    createdAt: serverTimestamp(),
+                    uploadedBy: localStorage.getItem('currentTeacher') || '管理員'
+                });
+                showMessage('公告上傳成功');
+                pendingAnnouncementFile = null;
+                document.getElementById('announcementFile').value = '';
+                document.getElementById('announcementUploadInfo').innerHTML = '';
+                document.getElementById('announcementTitleArea').classList.add('hidden');
+                document.getElementById('announcementTitleInput').value = '';
+                await loadAnnouncements();
+            } catch (err) {
+                console.error(err);
+                showMessage('上傳失敗，請確認檔案大小或網路連線', 'error');
+            } finally {
+                btn.innerText = '確認上傳公告';
+                btn.disabled = false;
+            }
+        };
+
+        const initAuth = async () => {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                    return;
+                }
+            } catch (e) {
+                console.warn("Custom token auth failed, falling back to anonymous:", e.message);
+            }
+            
+            try {
+                await signInAnonymously(auth);
+            } catch (e) {
+                console.error("Critical Auth Error:", e.message);
+                throw e;
+            }
+        };
+
+        const init = async () => {
+            onAuthStateChanged(auth, async (u) => {
+                user = u;
+                if (user) {
+                    await refreshData();
+                    const saved = localStorage.getItem('currentTeacher');
+                    if (saved) {
+                        document.getElementById('displayTeacherName').innerText = saved;
+                        document.getElementById('loginSection').classList.add('hidden');
+                        document.getElementById('mainSection').classList.remove('hidden');
+                        refreshClassDropdowns(saved);
+                    }
+                }
+            });
+
+            initAuth().catch(err => {
+                showMessage("系統連線失敗，請重新整理頁面", "error");
+            });
+
+            document.getElementById('btnLogin').onclick = () => {
+                const name = document.getElementById('loginTeacherInput').value.trim();
+                if (!name) { showMessage("請輸入姓名", "error"); return; }
+                localStorage.setItem('currentTeacher', name);
+                document.getElementById('displayTeacherName').innerText = name;
+                refreshClassDropdowns(name);
+                document.getElementById('loginSection').classList.add('hidden');
+                document.getElementById('mainSection').classList.remove('hidden');
+                showMessage("登入成功");
+                refreshData(); 
+            };
+
+            document.getElementById('btnLogout').onclick = () => { 
+                localStorage.removeItem('currentTeacher'); 
+                location.reload(); 
+            };
+
+            // 更新分頁切換邏輯，加入 Announcement
+            const tabs = ['Attendance', 'Students', 'History', 'Announcement', 'Admin'];
+            tabs.forEach(t => {
+                document.getElementById(`btnTab${t}`).onclick = () => {
+                    if (t === 'Admin' && cleanStr(localStorage.getItem('currentTeacher')) !== "管理員") {
+                        showMessage("權限不足", "error"); return;
+                    }
+                    tabs.forEach(x => {
+                        document.getElementById(`${x.toLowerCase()}Page`).classList.add('hidden');
+                        document.getElementById(`btnTab${x}`).classList.remove('active-tab');
+                    });
+                    document.getElementById(`${t.toLowerCase()}Page`).classList.remove('hidden');
+                    document.getElementById(`btnTab${t}`).classList.add('active-tab');
+                    // 切換到公告頁時重新載入
+                    if (t === 'Announcement') loadAnnouncements();
+                };
+            });
+
+            document.getElementById('teacherFile').onchange = (e) => processImport(e.target.files[0], 'teachers');
+            document.getElementById('studentFile').onchange = (e) => processImport(e.target.files[0], 'students');
+        };
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    </script>
+</body>
+</html>
