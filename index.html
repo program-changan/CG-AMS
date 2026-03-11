@@ -663,8 +663,9 @@
                 return;
             }
             studentContactArea.innerHTML = result.map(s => {
-                const phone = s.聯絡電話 || s.電話 || s.家長電話 || '未提供';
-                const village = s.放學里別 || s.里別 || '未註記';
+                const phoneRaw = s.聯絡電話 || s.電話 || s.家長電話 || '未提供';
+                const phone = phoneRaw.toString().replace(/\n/g, '<br>');
+                const village = (s.放學里別 || s.里別 || '未註記').toString().replace(/\n/g, '<br>');
                 return `
                     <div class="bg-blue-50 p-4 rounded-xl border border-blue-100 shadow-sm">
                         <div class="flex justify-between items-start">
@@ -673,7 +674,7 @@
                         </div>
                         <div class="bg-white p-3 rounded-lg border border-blue-100 mt-2">
                             <div class="text-xs text-gray-400 font-bold mb-1">聯絡電話</div>
-                            <div class="text-xl font-black text-blue-700">${phone}</div>
+                            <div class="text-lg font-black text-blue-700 leading-relaxed">${phone}</div>
                         </div>
                     </div>
                 `;
