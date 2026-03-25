@@ -143,6 +143,170 @@
             background: #e5e7eb;
             color: #333;
         }
+
+        /* 簽到費用單樣式 */
+        .expense-calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 2px;
+        }
+        .calendar-day {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 0.875rem;
+        }
+        .calendar-day:hover { background-color: #f3f4f6; }
+        .calendar-day.selected { background-color: #7c3aed; color: white; font-weight: bold; }
+        .calendar-day.other-month { color: #ccc; }
+        .calendar-day.today { border: 2px solid #7c3aed; }
+        
+        .signature-canvas {
+            border: 2px dashed #ccc;
+            background-color: #fff;
+            touch-action: none;
+            cursor: crosshair;
+        }
+        
+        /* A4 預覽樣式 */
+        .a4-container {
+            width: 210mm;
+            height: 297mm;
+            padding: 10mm 15mm 10mm 20mm; /* 增加邊距：上10, 右15, 下10, 左20 (留出裝訂/視覺空間) */
+            margin: 0 auto;
+            background: white;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            font-family: "標楷體", "DFKai-SB", serif;
+            position: relative;
+            color: black;
+            transform-origin: top center;
+            transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            box-sizing: border-box; /* 確保 padding 不會增加額外的高度或寬度 */
+        }
+        .magnifier-lens {
+            position: fixed;
+            width: 250px;
+            height: 250px;
+            border: 4px solid #7c3aed;
+            border-radius: 50%;
+            cursor: none;
+            pointer-events: none;
+            overflow: hidden;
+            z-index: 1000;
+            display: none;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5), inset 0 0 10px rgba(0,0,0,0.2);
+            background: white;
+        }
+        .magnifier-content {
+            position: absolute;
+            width: 210mm;
+            height: 297mm;
+            transform-origin: 0 0;
+            pointer-events: none;
+        }
+        .preview-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.9);
+            z-index: 200;
+            overflow: hidden;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .a4-preview-wrapper {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow: hidden;
+        }
+        .a4-scroll-area {
+            flex: 1;
+            width: 100%;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+        }
+        
+        .expense-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 2px solid black;
+        }
+        .expense-table th, .expense-table td {
+            border: 1px solid black;
+            padding: 1px; /* 從 2px 減至 1px */
+            text-align: center;
+            font-size: 13px; /* 從 14px 減至 13px */
+            height: 25px; /* 從 28px 減至 25px */
+        }
+        .vertical-text {
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+        }
+        
+        @media print {
+            @page {
+                size: A4;
+                margin: 0mm; /* 設為 0 以隱藏預設頁首頁尾 */
+            }
+            html, body { 
+                margin: 0; 
+                padding: 0; 
+                background: white; 
+                width: 210mm; 
+                height: 297mm;
+                overflow: hidden !important;
+            }
+            body * { visibility: hidden; }
+            .preview-overlay, .preview-overlay * { visibility: visible; }
+            .preview-overlay { 
+                position: absolute; 
+                left: 0; top: 0; 
+                background: white; 
+                padding: 0; 
+                width: 210mm; 
+                height: 297mm;
+                overflow: hidden !important;
+            }
+            .a4-preview-wrapper { 
+                width: 210mm !important; 
+                height: 297mm !important; 
+                overflow: hidden !important;
+                display: block !important;
+            }
+            .a4-scroll-area { 
+                width: 210mm !important; 
+                height: 297mm !important; 
+                overflow: hidden !important;
+                display: block !important;
+            }
+            .a4-container { 
+                box-shadow: none !important; 
+                margin: 0 !important; 
+                transform: scale(1) !important; 
+                zoom: 0.95; /* 增加邊距後，稍微降低 zoom 以確保依然不分頁 */
+                position: absolute !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 210mm !important;
+                height: 296.5mm !important; 
+                padding: 10mm 15mm 10mm 20mm !important; /* 同步增加列印邊距 */
+                box-sizing: border-box !important;
+                border: none !important;
+                break-after: avoid !important;
+                page-break-after: avoid !important;
+                page-break-inside: avoid !important;
+            }
+            .no-print { display: none !important; }
+        }
     </style>
 </head>
 <body class="p-2 md:p-6">
@@ -186,6 +350,7 @@
                     <button id="btnTabAttendance" class="px-4 py-2 active-tab whitespace-nowrap">即時點名</button>
                     <button id="btnTabStudents" class="px-4 py-2 whitespace-nowrap">學生資訊</button>
                     <button id="btnTabHistory" class="px-4 py-2 whitespace-nowrap">歷史記錄</button>
+                    <button id="btnTabExpense" class="px-4 py-2 whitespace-nowrap">簽到費用單</button>
                     <button id="btnTabAnnouncement" class="px-4 py-2 whitespace-nowrap">公告事項</button>
                     <button id="btnTabAdmin" class="hidden px-4 py-2 whitespace-nowrap">系統管理</button>
                     <button id="btnLogout" class="px-4 py-2 text-red-600 font-bold ml-4 whitespace-nowrap">登出</button>
@@ -279,6 +444,107 @@
                 </div>
             </div>
 
+            <!-- 分頁：簽到費用單 -->
+            <div id="expensePage" class="hidden bg-white rounded-xl shadow-md p-6">
+                <h3 class="text-xl font-bold mb-4 border-l-4 border-indigo-600 pl-3">簽到費用單製作</h3>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <!-- A. 歷史簽到費用單 -->
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">歷史簽到費用單</label>
+                        <select id="expenseHistorySelect" class="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-indigo-500 outline-none">
+                            <option value="">-- 查看歷史記錄 --</option>
+                        </select>
+                        <div id="adminExpenseList" class="hidden mt-4 space-y-2 max-h-60 overflow-y-auto border p-2 rounded bg-gray-50">
+                            <!-- 管理員可見的完整列表 -->
+                        </div>
+                    </div>
+
+                    <!-- B. 選擇上課班級 -->
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">上課班級</label>
+                        <select id="expenseClassSelect" class="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-indigo-500 outline-none">
+                            <option value="">-- 請選擇班級 --</option>
+                        </select>
+                    </div>
+
+                    <!-- C. 日期選擇 -->
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">上課日期 (可多選)</label>
+                        <button id="btnOpenCalendar" class="w-full p-3 border rounded-lg bg-white text-left flex justify-between items-center hover:bg-gray-50">
+                            <span id="selectedDatesText">尚未選擇日期</span>
+                            <span class="text-indigo-600">📅</span>
+                        </button>
+                    </div>
+
+                    <!-- D & E. 到勤/退勤時間 -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">到勤時間</label>
+                            <select id="expenseArrivalTime" class="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-indigo-500 outline-none">
+                                <option value="12:40">12:40</option>
+                                <option value="16:00">16:00</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">退勤時間</label>
+                            <select id="expenseDepartureTime" class="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-indigo-500 outline-none">
+                                <option value="16:00">16:00</option>
+                                <option value="18:20">18:20</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. 簽名區域 (直式) -->
+                <div class="mb-8 flex flex-col items-center">
+                    <label class="block text-sm font-bold text-gray-700 mb-2 self-start">教師簽名 (請於下方區域簽名)</label>
+                    <div class="flex flex-col items-center gap-4">
+                        <canvas id="signatureCanvas" width="200" height="300" class="signature-canvas rounded-lg shadow-inner"></canvas>
+                        <div class="flex gap-4">
+                            <button id="btnClearSignature" class="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg font-bold hover:bg-gray-300">清除</button>
+                            <button id="btnConfirmSignature" class="px-6 py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700">確認簽名</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. 生成按鈕 -->
+                <button id="btnGenerateExpense" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-xl shadow-lg transition duration-200 text-xl">預覽 簽到費用單</button>
+            </div>
+
+            <!-- 日曆選擇 Modal -->
+            <div id="calendarModal" class="fixed inset-0 bg-black bg-opacity-50 z-[150] hidden flex items-center justify-center p-4">
+                <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+                    <div class="bg-indigo-600 p-4 text-white flex justify-between items-center">
+                        <button id="prevMonth" class="text-2xl">&lt;</button>
+                        <h4 id="calendarMonthTitle" class="text-lg font-bold">2024年 3月</h4>
+                        <button id="nextMonth" class="text-2xl">&gt;</button>
+                    </div>
+                    <div class="p-4">
+                        <div class="grid grid-cols-7 gap-1 text-center text-xs font-bold text-gray-500 mb-2">
+                            <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
+                        </div>
+                        <div id="calendarGrid" class="expense-calendar-grid"></div>
+                        <div class="mt-6 flex gap-3">
+                            <button id="btnCancelCalendar" class="flex-1 py-2 bg-gray-100 text-gray-600 rounded-lg font-bold">取消</button>
+                            <button id="btnConfirmCalendar" class="flex-1 py-2 bg-indigo-600 text-white rounded-lg font-bold">確認</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 費用單預覽 Modal -->
+            <div id="expensePreviewModal" class="preview-overlay hidden">
+                <div class="flex gap-4 mb-4 no-print">
+                    <button id="btnCancelPreview" class="px-8 py-3 bg-gray-200 text-gray-700 rounded-xl font-bold text-lg hover:bg-gray-300">取消</button>
+                    <button id="btnConfirmExpense" class="px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold text-lg hover:bg-indigo-700 shadow-lg">確認生成</button>
+                    <button onclick="window.print()" class="px-8 py-3 bg-green-600 text-white rounded-xl font-bold text-lg hover:bg-green-700 shadow-lg">列印</button>
+                </div>
+                <div id="a4PreviewContainer" class="a4-container">
+                    <!-- A4 Table Content will be generated here -->
+                </div>
+            </div>
+
             <!-- 分頁：公告事項 -->
             <div id="announcementPage" class="hidden bg-white rounded-xl shadow-md p-6">
                 <h3 class="text-xl font-bold mb-4 border-l-4 border-orange-500 pl-3">公告事項</h3>
@@ -352,6 +618,9 @@
         let currentAttendanceRecords = {}; 
         let globalHistoryLogs = [];
         let allAnnouncements = [];
+        let allExpenseSheets = []; // 存儲簽到費用單資料
+        let selectedDates = []; // 存儲日曆中選擇的日期
+        let calendarCurrentMonth = new Date();
         let pendingAnnouncementFile = null; // 暫存待上傳的公告檔案
 
         const showMessage = (msg, type = "success") => {
@@ -500,7 +769,554 @@
             }
         };
 
-        // ===== 原有功能 =====
+        // ===== 簽到費用單相關功能 =====
+
+        // 載入簽到費用單列表
+        async function loadExpenseSheets() {
+            if (!auth.currentUser) return;
+            const currentTeacher = localStorage.getItem('currentTeacher');
+            const isAdmin = cleanStr(currentTeacher) === "管理員";
+            const select = document.getElementById('expenseHistorySelect');
+            const adminList = document.getElementById('adminExpenseList');
+            
+            try {
+                const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'expenseSheets'));
+                allExpenseSheets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                allExpenseSheets.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+
+                let mySheets = isAdmin ? allExpenseSheets : allExpenseSheets.filter(s => cleanStr(s.teacherName) === cleanStr(currentTeacher));
+                
+                select.innerHTML = '<option value="">-- 查看歷史記錄 --</option>';
+                mySheets.forEach((s, idx) => {
+                    const dateStr = s.createdAt ? new Date(s.createdAt.seconds * 1000).toLocaleDateString('zh-TW') : '未知';
+                    select.add(new Option(`${dateStr} - ${s.className}`, s.id));
+                });
+
+                document.getElementById('expenseHistorySelect').onchange = (e) => {
+                    if (e.target.value) {
+                        viewExpenseSheet(e.target.value);
+                    }
+                };
+
+                if (isAdmin) {
+                    adminList.classList.remove('hidden');
+                    adminList.innerHTML = '<h5 class="text-xs font-bold text-gray-500 mb-2">所有教師費用單 (管理員)</h5>' + 
+                        mySheets.map(s => `
+                            <div class="flex items-center justify-between bg-white p-2 rounded border text-xs shadow-sm">
+                                <div class="flex-1 truncate">
+                                    <span class="font-bold text-indigo-700">${s.teacherName}</span>
+                                    <span class="text-gray-400 ml-2">${s.className} (${s.year}/${s.month})</span>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button onclick="viewExpenseSheet('${s.id}')" class="text-blue-500 hover:text-blue-700 font-bold">查看</button>
+                                    <button onclick="deleteExpenseSheet('${s.id}')" class="text-red-500 hover:text-red-700 font-bold">刪除</button>
+                                </div>
+                            </div>
+                        `).join('');
+                } else {
+                    adminList.classList.add('hidden');
+                }
+            } catch (err) {
+                console.error("載入費用單失敗:", err);
+            }
+        }
+
+        window.viewExpenseSheet = (id) => {
+            const sheet = allExpenseSheets.find(s => s.id === id);
+            if (!sheet) return;
+            renderExpensePreview(sheet.renderData, true); // true means view only
+        };
+
+        window.deleteExpenseSheet = async (id) => {
+            if (!confirm('確定要刪除此費用單嗎？')) return;
+            try {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'expenseSheets', id));
+                showMessage('已刪除');
+                await loadExpenseSheets();
+            } catch (err) {
+                console.error(err);
+                showMessage('刪除失敗', 'error');
+            }
+        };
+
+        // 日曆邏輯
+        function renderCalendar() {
+            const grid = document.getElementById('calendarGrid');
+            const title = document.getElementById('calendarMonthTitle');
+            const year = calendarCurrentMonth.getFullYear();
+            const month = calendarCurrentMonth.getMonth();
+            
+            title.innerText = `${year}年 ${month + 1}月`;
+            
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const prevMonthDays = new Date(year, month, 0).getDate();
+            
+            let html = '';
+            
+            // 上個月的尾巴
+            for (let i = firstDay - 1; i >= 0; i--) {
+                const d = prevMonthDays - i;
+                html += `<div class="calendar-day other-month">${d}</div>`;
+            }
+            
+            // 當月
+            const today = new Date();
+            for (let i = 1; i <= daysInMonth; i++) {
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+                const isSelected = selectedDates.includes(dateStr);
+                const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === i;
+                html += `<div class="calendar-day ${isSelected ? 'selected' : ''} ${isToday ? 'today' : ''}" onclick="toggleDate('${dateStr}')">${i}</div>`;
+            }
+            
+            grid.innerHTML = html;
+        }
+
+        window.toggleDate = (dateStr) => {
+            const idx = selectedDates.indexOf(dateStr);
+            if (idx > -1) {
+                selectedDates.splice(idx, 1);
+            } else {
+                selectedDates.push(dateStr);
+            }
+            renderCalendar();
+        };
+
+        // 簽名邏輯
+        let sigCtx, sigDrawing = false;
+        function initSignature() {
+            const canvas = document.getElementById('signatureCanvas');
+            sigCtx = canvas.getContext('2d');
+            sigCtx.lineWidth = 3;
+            sigCtx.lineCap = 'round';
+            sigCtx.strokeStyle = '#000';
+
+            const getPos = (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                return { x: clientX - rect.left, y: clientY - rect.top };
+            };
+
+            const start = (e) => { sigDrawing = true; sigCtx.beginPath(); const pos = getPos(e); sigCtx.moveTo(pos.x, pos.y); e.preventDefault(); };
+            const move = (e) => { if (!sigDrawing) return; const pos = getPos(e); sigCtx.lineTo(pos.x, pos.y); sigCtx.stroke(); e.preventDefault(); };
+            const end = () => { sigDrawing = false; };
+
+            canvas.addEventListener('mousedown', start);
+            canvas.addEventListener('mousemove', move);
+            window.addEventListener('mouseup', end);
+            canvas.addEventListener('touchstart', start);
+            canvas.addEventListener('touchmove', move);
+            canvas.addEventListener('touchend', end);
+
+            // 載入快取的簽名
+            const saved = localStorage.getItem(`sig_${localStorage.getItem('currentTeacher')}`);
+            if (saved) {
+                const img = new Image();
+                img.onload = () => sigCtx.drawImage(img, 0, 0);
+                img.src = saved;
+            }
+        }
+
+        // 時間預設邏輯
+        function updateTimeDefaults() {
+            const className = document.getElementById('expenseClassSelect').value;
+            if (!className || selectedDates.length === 0) return;
+            
+            const firstDate = new Date(selectedDates[0]);
+            const dayOfWeek = firstDate.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+            
+            const arrivalSelect = document.getElementById('expenseArrivalTime');
+            const departureSelect = document.getElementById('expenseDepartureTime');
+            
+            const c = cleanStr(className);
+            
+            // Logic based on requirements
+            if (['1A', '1B', '2A', '2B'].some(v => c.includes(v))) {
+                arrivalSelect.value = (dayOfWeek === 2) ? "16:00" : "12:40";
+            } else if (['3A', '中年級混合', '4A', '4B'].some(v => c.includes(v))) {
+                arrivalSelect.value = (dayOfWeek === 3 || dayOfWeek === 5) ? "12:40" : "16:00";
+            } else if (['5A', '5B', '6A', '6B'].some(v => c.includes(v))) {
+                arrivalSelect.value = (dayOfWeek === 3) ? "12:40" : "16:00";
+            }
+            
+            // Default departure
+            departureSelect.value = "18:20";
+        }
+
+        // 生成預覽
+        let currentPreviewData = null;
+        async function generateExpensePreview() {
+            const teacherName = localStorage.getItem('currentTeacher');
+            const className = document.getElementById('expenseClassSelect').value;
+            const arrivalTime = document.getElementById('expenseArrivalTime').value;
+            const departureTime = document.getElementById('expenseDepartureTime').value;
+            
+            if (!className || selectedDates.length === 0) {
+                showMessage('請選擇班級與日期', 'error');
+                return;
+            }
+
+            const canvas = document.getElementById('signatureCanvas');
+            const signatureData = canvas.toDataURL();
+
+            // 整理資料
+            const dates = [...selectedDates].sort();
+            const year = new Date(dates[0]).getFullYear() - 1911; // 民國年
+            const month = new Date(dates[0]).getMonth() + 1;
+
+            const items = dates.map(d => {
+                const dateObj = new Date(d);
+                const day = dateObj.getDay();
+                // 這裡可以根據日期再細分到勤/退勤時間，但目前先用統一的
+                return {
+                    date: d,
+                    arrival: arrivalTime,
+                    departure: departureTime,
+                    sessions: calculateSessions(arrivalTime, departureTime)
+                };
+            });
+
+            currentPreviewData = {
+                teacherName,
+                className,
+                year,
+                month,
+                items,
+                signature: signatureData
+            };
+
+            renderExpensePreview(currentPreviewData);
+        }
+
+        function calculateSessions(start, end) {
+            if (start === "12:40" && end === "16:00") return [{ type: 4, label: "12:40-16:00" }];
+            if (start === "16:00" && end === "18:20") return [{ type: 3, label: "16:00-18:20" }];
+            if (start === "12:40" && end === "18:20") return [
+                { type: 4, label: "12:40-16:00" },
+                { type: 3, label: "16:00-18:20" }
+            ];
+            return [];
+        }
+
+        function numberToChinese(num) {
+            const digits = ['零', '壹', '貳', '參', '肆', '伍', '陸', '柒', '捌', '玖'];
+            const units = ['', '拾', '佰', '仟', '萬', '拾', '佰', '仟', '億'];
+            let str = num.toString();
+            let result = '';
+            for (let i = 0; i < str.length; i++) {
+                let n = parseInt(str[i]);
+                let p = str.length - i - 1;
+                if (n !== 0) {
+                    result += digits[n] + units[p];
+                } else {
+                    if (result.length > 0 && result[result.length - 1] !== '零' && p !== 0 && p !== 4) {
+                        result += '零';
+                    }
+                    if (p === 4 && result.length > 0) {
+                        result += '萬';
+                    }
+                }
+            }
+            return result.replace(/零+$/, '') + '元整';
+        }
+
+        function renderExpensePreview(data, viewOnly = false) {
+            const modal = document.getElementById('expensePreviewModal');
+            
+            // 整理資料，如果跨時段則拆分成兩項填寫
+            const expandedItems = [];
+            data.items.forEach(item => {
+                if (item.arrival === "12:40" && item.departure === "18:20") {
+                    expandedItems.push({ date: item.date, arrival: "12:40", departure: "16:00", type: 4 });
+                    expandedItems.push({ date: item.date, arrival: "16:00", departure: "18:20", type: 3 });
+                } else {
+                    const type = (item.arrival === "12:40" && item.departure === "16:00") ? 4 : 
+                                 (item.arrival === "16:00" && item.departure === "18:20") ? 3 : 0;
+                    expandedItems.push({ date: item.date, arrival: item.arrival, departure: item.departure, type: type });
+                }
+            });
+
+            const total4 = expandedItems.filter(i => i.type === 4).length;
+            const total3 = expandedItems.filter(i => i.type === 3).length;
+            const amount4 = total4 * 4 * 336;
+            const amount3 = total3 * 3 * 400;
+            const totalAmount = amount4 + amount3;
+
+            const formatTime = (time) => {
+                if (!time || time === ' : ') return ' : ';
+                const parts = time.split(':');
+                return parts.length === 2 ? `${parts[0]}<br>:<br>${parts[1]}` : time;
+            };
+
+            const renderTableBlock = (items) => {
+                const cols = [];
+                for (let i = 0; i < 15; i++) cols.push(items[i] || null);
+                
+                return `
+                    <table class="expense-table w-full mb-0 border-b-0">
+                        <tr>
+                            <th class="w-16 font-bold py-1 text-[12px]">授課節數</th>
+                            ${cols.map(c => `<td class="leading-tight text-[10px]">${c ? c.type + '<br>節' : ''}</td>`).join('')}
+                        </tr>
+                        <tr>
+                            <th class="w-16 font-bold py-1 text-[12px]">到勤日</th>
+                            ${cols.map(c => `<td class="leading-tight font-bold text-[10px]">${c ? c.date.split('-')[1] + '<br>/<br>' + c.date.split('-')[2] : ''}</td>`).join('')}
+                        </tr>
+                        <tr>
+                            <th class="w-16 font-bold py-1 text-[12px]">到勤時間</th>
+                            ${cols.map(c => `<td class="text-[9px] leading-tight h-8">${c ? formatTime(c.arrival) : ' : '}</td>`).join('')}
+                        </tr>
+                        <tr>
+                            <th class="w-16 font-bold py-1 text-[12px]">到勤簽到</th>
+                            ${cols.map(c => `<td style="height: 80px; vertical-align: middle;">${c ? `<img src="${data.signature}" class="max-h-full max-w-full mx-auto object-contain">` : ''}</td>`).join('')}
+                        </tr>
+                        <tr>
+                            <th class="w-16 font-bold py-1 text-[12px]">退勤時間</th>
+                            ${cols.map(c => `<td class="text-[9px] leading-tight h-8">${c ? formatTime(c.departure) : ' : '}</td>`).join('')}
+                        </tr>
+                        <tr>
+                            <th class="w-16 font-bold py-1 text-[12px]">退勤簽到</th>
+                            ${cols.map(c => `<td style="height: 80px; vertical-align: middle;">${c ? `<img src="${data.signature}" class="max-h-full max-w-full mx-auto object-contain">` : ''}</td>`).join('')}
+                        </tr>
+                    </table>
+                `;
+            };
+
+            let tableHtml = '';
+            if (expandedItems.length > 15) {
+                const block1 = expandedItems.slice(0, 15);
+                const block2 = expandedItems.slice(15, 30);
+                tableHtml = renderTableBlock(block1) + 
+                           '<div class="border-t-2 border-black my-1"></div>' + 
+                           renderTableBlock(block2);
+            } else {
+                tableHtml = renderTableBlock(expandedItems);
+            }
+
+            const editHtml = viewOnly ? '' : `
+                <div class="bg-white p-3 rounded-xl mb-4 w-full max-w-4xl no-print shadow-lg border-2 border-indigo-100">
+                    <h4 class="font-bold mb-2 text-sm text-indigo-700 flex justify-between">
+                        <span>預覽與修改資料 (下方表格將同步更新)</span>
+                        <span class="text-xs text-gray-400">若日期過多可於此區域內捲動</span>
+                    </h4>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-32 overflow-y-auto p-1">
+                        ${data.items.map((item, idx) => `
+                            <div class="flex items-center gap-2 bg-gray-50 p-1.5 rounded border text-[11px]">
+                                <span class="font-bold w-16">${item.date.split('-').slice(1).join('/')}</span>
+                                <select onchange="updatePreviewItem(${idx}, 'arrival', this.value)" class="p-0.5 border rounded bg-white">
+                                    <option value="12:40" ${item.arrival === '12:40' ? 'selected' : ''}>12:40</option>
+                                    <option value="16:00" ${item.arrival === '16:00' ? 'selected' : ''}>16:00</option>
+                                </select>
+                                <span>-</span>
+                                <select onchange="updatePreviewItem(${idx}, 'departure', this.value)" class="p-0.5 border rounded bg-white">
+                                    <option value="16:00" ${item.departure === '16:00' ? 'selected' : ''}>16:00</option>
+                                    <option value="18:20" ${item.departure === '18:20' ? 'selected' : ''}>18:20</option>
+                                </select>
+                                <button onclick="removePreviewItem(${idx})" class="ml-auto text-red-500 font-bold px-1 hover:bg-red-50 rounded">✕</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+
+            modal.innerHTML = `
+                <div id="magnifierLens" class="magnifier-lens no-print">
+                    <div id="magnifierContent" class="magnifier-content"></div>
+                </div>
+                <div class="a4-preview-wrapper">
+                    <div class="flex gap-4 mb-3 no-print">
+                        <button onclick="document.getElementById('expensePreviewModal').classList.add('hidden')" class="px-6 py-2 bg-gray-200 text-gray-700 rounded-xl font-bold hover:bg-gray-300 shadow">取消</button>
+                        ${!viewOnly ? `<button id="btnConfirmExpense" class="px-6 py-2 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 shadow-lg">確認生成</button>` : ''}
+                        <button onclick="window.print()" class="px-6 py-2 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 shadow-lg">下載</button>
+                    </div>
+                    ${editHtml}
+                    <div class="a4-scroll-area flex items-start justify-center">
+                        <div id="a4PreviewContainer" class="a4-container shadow-2xl">
+                            <div class="text-center mb-1">
+                                <h2 class="text-2xl font-bold mb-1">新北市汐止區長安國民小學 課後活動班 教師簽到單</h2>
+                                <div class="flex justify-between items-center px-1 text-lg border-b-2 border-black pb-0.5">
+                                    <span>( ${data.year} ) 年 ( ${data.month} ) 月</span>
+                                    <span>老師姓名：${data.teacherName}</span>
+                                    <span>上課班級：${data.className}</span>
+                                </div>
+                            </div>
+                            
+                            ${tableHtml}
+
+                            <table class="expense-table w-full border-t-2 border-black">
+                                <tr>
+                                    <th class="w-16 font-bold py-1 text-[12px]">合計節數</th>
+                                    <td colspan="15" class="text-left px-2 py-1">
+                                        <div class="space-y-0.5 text-sm">
+                                            <div>4 節 X &nbsp;&nbsp;&nbsp; ${total4} &nbsp;&nbsp;&nbsp; 天 = &nbsp;&nbsp;&nbsp; ${total4 * 4} &nbsp;&nbsp;&nbsp; 節</div>
+                                            <div>3 節 X &nbsp;&nbsp;&nbsp; ${total3} &nbsp;&nbsp;&nbsp; 天 = &nbsp;&nbsp;&nbsp; ${total3 * 3} &nbsp;&nbsp;&nbsp; 節</div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th class="w-16 font-bold py-1 text-[12px]">鐘點費</th>
+                                    <td colspan="15" class="text-left px-2 py-1">
+                                        <div class="space-y-0.5 text-sm">
+                                            <div>336 元 X &nbsp;&nbsp;&nbsp; ${total4 * 4} &nbsp;&nbsp;&nbsp; 節 = &nbsp;&nbsp;&nbsp; ${amount4} &nbsp;&nbsp;&nbsp; 元</div>
+                                            <div>400 元 X &nbsp;&nbsp;&nbsp; ${total3 * 3} &nbsp;&nbsp;&nbsp; 節 = &nbsp;&nbsp;&nbsp; ${amount3} &nbsp;&nbsp;&nbsp; 元</div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th class="w-16 font-bold py-1 text-[12px]">合計總額</th>
+                                    <td colspan="15" class="text-left px-2 py-1 font-bold text-base">
+                                        新台幣：${numberToChinese(totalAmount)} ( 新台幣：${totalAmount} 元 )
+                                    </td>
+                                </tr>
+                            </table>
+                            <div class="flex justify-around mt-3 text-lg font-bold pb-0">
+                                <div>承辦人簽章：</div>
+                                <div>主管簽章：</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            modal.classList.remove('hidden');
+
+            // 自動縮放邏輯
+            let currentBaseScale = 1;
+            const adjustScale = () => {
+                const container = document.getElementById('a4PreviewContainer');
+                const scrollArea = document.querySelector('.a4-scroll-area');
+                if (!container || !scrollArea) return;
+                
+                container.style.transform = 'scale(1)'; 
+                
+                const availH = scrollArea.offsetHeight - 20; // 稍微多留一點空間
+                const availW = scrollArea.offsetWidth - 20;
+                const contentH = container.scrollHeight; // 使用 scrollHeight 以確保包含溢出內容
+                const contentW = container.scrollWidth;
+                
+                currentBaseScale = Math.min(availH / contentH, availW / contentW, 1);
+                container.style.transform = `scale(${currentBaseScale})`;
+            };
+            
+            // 放大鏡邏輯 (改進版：鏡片式)
+            const initMagnifier = () => {
+                const container = document.getElementById('a4PreviewContainer');
+                const scrollArea = document.querySelector('.a4-scroll-area');
+                const lens = document.getElementById('magnifierLens');
+                const lensContent = document.getElementById('magnifierContent');
+                if (!container || !scrollArea || !lens || !lensContent) return;
+
+                const zoomFactor = 1.8;
+
+                const handleMove = (e) => {
+                    const cRect = container.getBoundingClientRect();
+                    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+                    // 確保內容是最新的 (只在第一次顯示時更新)
+                    if (lens.style.display === 'none' || !lens.style.display) {
+                        lensContent.innerHTML = container.innerHTML;
+                    }
+
+                    // 如果滑鼠在 A4 區域內
+                    if (clientX >= cRect.left && clientX <= cRect.right && 
+                        clientY >= cRect.top && clientY <= cRect.bottom) {
+                        
+                        lens.style.display = 'block';
+                        
+                        const finalScale = currentBaseScale * zoomFactor;
+                        lensContent.style.transform = `scale(${finalScale})`;
+
+                        // 1. 移動鏡片位置
+                        lens.style.left = `${clientX - lens.offsetWidth / 2}px`;
+                        lens.style.top = `${clientY - lens.offsetHeight / 2}px`;
+
+                        // 2. 移動鏡片內的內容位置
+                        const x = (clientX - cRect.left) / cRect.width;
+                        const y = (clientY - cRect.top) / cRect.height;
+
+                        const tx = -(x * container.offsetWidth * finalScale - lens.offsetWidth / 2);
+                        const ty = -(y * container.offsetHeight * finalScale - lens.offsetHeight / 2);
+
+                        lensContent.style.left = `${tx}px`;
+                        lensContent.style.top = `${ty}px`;
+                        
+                        container.style.cursor = 'none';
+                    } else {
+                        lens.style.display = 'none';
+                        container.style.cursor = 'default';
+                    }
+                };
+
+                const handleEnd = () => {
+                    lens.style.display = 'none';
+                    container.style.cursor = 'default';
+                };
+
+                scrollArea.addEventListener('mousemove', handleMove);
+                scrollArea.addEventListener('mouseleave', handleEnd);
+                scrollArea.addEventListener('touchstart', handleMove, { passive: true });
+                scrollArea.addEventListener('touchmove', handleMove, { passive: true });
+                scrollArea.addEventListener('touchend', handleEnd);
+            };
+            
+            requestAnimationFrame(() => {
+                setTimeout(() => {
+                    adjustScale();
+                    initMagnifier();
+                }, 100);
+            });
+            window.addEventListener('resize', adjustScale);
+
+            // 手動綁定按鈕事件，因為每次 innerHTML 都會重置 DOM 節點
+            if (!viewOnly) {
+                const confirmBtn = document.getElementById('btnConfirmExpense');
+                if (confirmBtn) {
+                    confirmBtn.onclick = saveExpenseSheet;
+                }
+            }
+        }
+
+        window.updatePreviewItem = (idx, field, value) => {
+            if (!currentPreviewData) return;
+            currentPreviewData.items[idx][field] = value;
+            currentPreviewData.items[idx].sessions = calculateSessions(currentPreviewData.items[idx].arrival, currentPreviewData.items[idx].departure);
+            renderExpensePreview(currentPreviewData);
+        };
+
+        window.removePreviewItem = (idx) => {
+            if (!currentPreviewData) return;
+            currentPreviewData.items.splice(idx, 1);
+            renderExpensePreview(currentPreviewData);
+        };
+
+        async function saveExpenseSheet() {
+            if (!auth.currentUser || !currentPreviewData) return;
+            const btn = document.getElementById('btnConfirmExpense');
+            btn.innerText = '儲存中...';
+            btn.disabled = true;
+            try {
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'expenseSheets'), {
+                    teacherName: currentPreviewData.teacherName,
+                    className: currentPreviewData.className,
+                    year: currentPreviewData.year,
+                    month: currentPreviewData.month,
+                    renderData: currentPreviewData,
+                    createdAt: serverTimestamp()
+                });
+                showMessage('簽到費用單已儲存');
+                document.getElementById('expensePreviewModal').classList.add('hidden');
+                await loadExpenseSheets();
+            } catch (err) {
+                console.error(err);
+                showMessage('儲存失敗', 'error');
+            } finally {
+                btn.innerText = '確認生成';
+                btn.disabled = false;
+            }
+        }
+
+        // ===== 原有功能結束 =====
 
         async function refreshData() {
             if (!auth.currentUser) return;
@@ -529,6 +1345,7 @@
             const selectAtt = document.getElementById('classSelect');
             const selectInfo = document.getElementById('studentInfoClassSelect');
             const selectHist = document.getElementById('historyClassSelect');
+            const selectExp = document.getElementById('expenseClassSelect');
             const adminBadge = document.getElementById('adminBadge');
             const btnAdmin = document.getElementById('btnTabAdmin');
             
@@ -570,6 +1387,9 @@
 
             selectHist.innerHTML = `<option value="">-- 所有管理班級 --</option>`;
             myClasses.forEach(cls => selectHist.add(new Option(cls, cls)));
+
+            selectExp.innerHTML = `<option value="">-- 請選擇班級 --</option>`;
+            myClasses.forEach(cls => selectExp.add(new Option(cls, cls)));
         }
 
         window.setStatus = (idx, status, btn) => {
@@ -962,8 +1782,8 @@
                 location.reload(); 
             };
 
-            // 更新分頁切換邏輯，加入 Announcement
-            const tabs = ['Attendance', 'Students', 'History', 'Announcement', 'Admin'];
+            // 更新分頁切換邏輯，加入 Expense
+            const tabs = ['Attendance', 'Students', 'History', 'Expense', 'Announcement', 'Admin'];
             tabs.forEach(t => {
                 document.getElementById(`btnTab${t}`).onclick = () => {
                     if (t === 'Admin' && cleanStr(localStorage.getItem('currentTeacher')) !== "管理員") {
@@ -977,11 +1797,60 @@
                     document.getElementById(`btnTab${t}`).classList.add('active-tab');
                     // 切換到公告頁時重新載入
                     if (t === 'Announcement') loadAnnouncements();
+                    if (t === 'Expense') loadExpenseSheets();
                 };
             });
 
             document.getElementById('teacherFile').onchange = (e) => processImport(e.target.files[0], 'teachers');
             document.getElementById('studentFile').onchange = (e) => processImport(e.target.files[0], 'students');
+
+            // 簽到費用單事件監聽
+            document.getElementById('btnOpenCalendar').onclick = () => {
+                renderCalendar();
+                document.getElementById('calendarModal').classList.remove('hidden');
+            };
+            document.getElementById('prevMonth').onclick = () => {
+                calendarCurrentMonth.setMonth(calendarCurrentMonth.getMonth() - 1);
+                renderCalendar();
+            };
+            document.getElementById('nextMonth').onclick = () => {
+                calendarCurrentMonth.setMonth(calendarCurrentMonth.getMonth() + 1);
+                renderCalendar();
+            };
+            document.getElementById('btnCancelCalendar').onclick = () => {
+                document.getElementById('calendarModal').classList.add('hidden');
+            };
+            document.getElementById('btnConfirmCalendar').onclick = () => {
+                document.getElementById('calendarModal').classList.add('hidden');
+                const text = selectedDates.length > 0 ? `已選擇 ${selectedDates.length} 個日期` : '尚未選擇日期';
+                document.getElementById('selectedDatesText').innerText = text;
+                updateTimeDefaults();
+            };
+            document.getElementById('expenseClassSelect').onchange = updateTimeDefaults;
+
+            document.getElementById('btnClearSignature').onclick = () => {
+                const canvas = document.getElementById('signatureCanvas');
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            };
+            document.getElementById('btnConfirmSignature').onclick = () => {
+                const canvas = document.getElementById('signatureCanvas');
+                const data = canvas.toDataURL();
+                localStorage.setItem(`sig_${localStorage.getItem('currentTeacher')}`, data);
+                showMessage('簽名已儲存');
+            };
+
+            document.getElementById('btnGenerateExpense').onclick = generateExpensePreview;
+            document.getElementById('btnCancelPreview').onclick = () => {
+                document.getElementById('expensePreviewModal').classList.add('hidden');
+            };
+            document.getElementById('btnConfirmExpense').onclick = saveExpenseSheet;
+
+            document.getElementById('expenseHistorySelect').onchange = (e) => {
+                if (e.target.value) viewExpenseSheet(e.target.value);
+            };
+
+            initSignature();
         };
 
         if (document.readyState === 'loading') {
