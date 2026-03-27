@@ -323,6 +323,19 @@
             </div>
         </div>
 
+        <!-- 點名重複確認 Modal -->
+        <div id="attendanceConfirmModal" class="fixed inset-0 bg-black bg-opacity-50 z-[250] hidden flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center">
+                <div class="text-red-500 text-5xl mb-4">⚠️</div>
+                <h3 class="text-2xl font-bold mb-2">今天已經點過名了</h3>
+                <p class="text-gray-600 mb-8">是否要覆蓋上次的點名資料？</p>
+                <div class="flex gap-4">
+                    <button id="btnCancelAttendanceOverlap" class="flex-1 py-3 bg-gray-200 text-gray-700 rounded-xl font-bold hover:bg-gray-300 transition">取消</button>
+                    <button id="btnConfirmAttendanceOverlap" class="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition">覆蓋</button>
+                </div>
+            </div>
+        </div>
+
         <!-- 登入介面 -->
         <div id="loginSection" class="flex items-center justify-center min-h-screen">
             <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md login-card">
@@ -587,6 +600,57 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- 刪除歷史點名資料 (管理員專用) -->
+                <div class="mt-12 border-t-2 border-gray-100 pt-8">
+                    <h4 class="text-xl font-bold mb-6 text-red-700 flex items-center">
+                        <span class="mr-2">🗑️</span> 刪除歷史點名資料
+                    </h4>
+                    <div class="bg-red-50 p-6 rounded-2xl border border-red-100">
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-2">篩選班級</label>
+                                <select id="adminDeleteClassSelect" class="w-full p-3 border rounded-lg bg-white">
+                                    <option value="">-- 所有班級 --</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-2">篩選老師</label>
+                                <select id="adminDeleteTeacherSelect" class="w-full p-3 border rounded-lg bg-white">
+                                    <option value="">-- 所有老師 --</option>
+                                </select>
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-bold text-gray-700 mb-2">日期區間</label>
+                                <div class="flex gap-2">
+                                    <input type="date" id="adminDeleteStartDate" class="w-1/2 p-3 border rounded-lg bg-white">
+                                    <input type="date" id="adminDeleteEndDate" class="w-1/2 p-3 border rounded-lg bg-white">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex justify-end gap-4 mb-6">
+                            <button id="btnAdminQueryDelete" class="bg-gray-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-gray-700 transition">查詢符合資料</button>
+                            <button id="btnAdminBatchDelete" class="bg-red-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-red-700 transition shadow-lg">批量刪除所選</button>
+                        </div>
+                        
+                        <div class="bg-white rounded-xl border border-red-100 overflow-hidden">
+                            <table class="w-full text-left border-collapse text-sm">
+                                <thead>
+                                    <tr class="bg-red-100 text-red-900">
+                                        <th class="p-3 border text-center"><input type="checkbox" id="adminDeleteSelectAll"></th>
+                                        <th class="p-3 border">日期</th>
+                                        <th class="p-3 border">班級</th>
+                                        <th class="p-3 border">老師</th>
+                                        <th class="p-3 border">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="adminDeleteTableBody">
+                                    <tr><td colspan="5" class="p-8 text-center text-gray-400">請設定篩選條件並點擊查詢</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -625,7 +689,7 @@
 
         const showMessage = (msg, type = "success") => {
             const box = document.getElementById('messageBox');
-            box.innerText = msg;
+            box.innerHTML = msg;
             box.className = `fixed top-4 left-1/2 transform -translate-x-1/2 z-50 px-6 py-3 rounded-lg shadow-xl text-white font-bold ${type === 'success' ? 'bg-green-600' : 'bg-red-600'}`;
             box.classList.remove('hidden');
             setTimeout(() => box.classList.add('hidden'), 3000);
@@ -884,6 +948,26 @@
 
         // 簽名邏輯
         let sigCtx, sigDrawing = false;
+
+        function loadSavedSignature() {
+            const canvas = document.getElementById('signatureCanvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const teacher = localStorage.getItem('currentTeacher');
+            if (!teacher) return;
+            const saved = localStorage.getItem(`sig_${teacher}`);
+            if (saved) {
+                const img = new Image();
+                img.onload = () => {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0);
+                };
+                img.src = saved;
+            } else {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+        }
+
         function initSignature() {
             const canvas = document.getElementById('signatureCanvas');
             sigCtx = canvas.getContext('2d');
@@ -910,12 +994,7 @@
             canvas.addEventListener('touchend', end);
 
             // 載入快取的簽名
-            const saved = localStorage.getItem(`sig_${localStorage.getItem('currentTeacher')}`);
-            if (saved) {
-                const img = new Image();
-                img.onload = () => sigCtx.drawImage(img, 0, 0);
-                img.src = saved;
-            }
+            loadSavedSignature();
         }
 
         // 時間預設邏輯
@@ -1336,6 +1415,20 @@
 
                 // 同時載入公告
                 await loadAnnouncements();
+
+                // 初始化管理員刪除功能的下拉選單
+                const adminDeleteClassSelect = document.getElementById('adminDeleteClassSelect');
+                const adminDeleteTeacherSelect = document.getElementById('adminDeleteTeacherSelect');
+                if (adminDeleteClassSelect && adminDeleteTeacherSelect) {
+                    adminDeleteClassSelect.innerHTML = '<option value="">-- 所有班級 --</option>';
+                    Object.keys(allStudentsData).sort().forEach(cls => {
+                        adminDeleteClassSelect.add(new Option(allStudentsData[cls].originalName, allStudentsData[cls].originalName));
+                    });
+                    
+                    adminDeleteTeacherSelect.innerHTML = '<option value="">-- 所有老師 --</option>';
+                    const teachers = [...new Set(allTeachersData.map(t => t.teacherName || t.老師姓名 || t.老師 || '').filter(t => t))].sort();
+                    teachers.forEach(t => adminDeleteTeacherSelect.add(new Option(t, t)));
+                }
             } catch (error) { 
                 console.error("同步失敗:", error); 
             }
@@ -1556,19 +1649,19 @@
                     logs = logs.filter(l => l.date === todayStr);
                 } else if (range === 'week') {
                     const lastWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-                    logs = logs.filter(l => new Date(l.date) >= lastWeek);
+                    logs = logs.filter(l => new Date(l.date.replace(/-/g, '/')) >= lastWeek);
                 } else if (range === 'month') {
                     const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
-                    logs = logs.filter(l => new Date(l.date) >= lastMonth);
+                    logs = logs.filter(l => new Date(l.date.replace(/-/g, '/')) >= lastMonth);
                 } else if (range === 'custom') {
                     const startInput = document.getElementById('historyStartDate').value;
                     const endInput = document.getElementById('historyEndDate').value;
                     if (startInput && endInput) {
-                        const start = new Date(startInput);
-                        const end = new Date(endInput);
+                        const start = new Date(startInput.replace(/-/g, '/'));
+                        const end = new Date(endInput.replace(/-/g, '/'));
                         end.setHours(23, 59, 59, 999);
                         logs = logs.filter(l => {
-                            const d = new Date(l.date);
+                            const d = new Date(l.date.replace(/-/g, '/'));
                             return d >= start && d <= end;
                         });
                     }
@@ -1643,14 +1736,67 @@
         document.getElementById('btnSubmitAttendance').onclick = async () => {
             if (!auth.currentUser) return;
             const className = document.getElementById('classSelect').value;
+            const teacher = localStorage.getItem('currentTeacher');
+            const today = new Date().toLocaleDateString('zh-TW');
+
+            // 檢查是否已存在當天、該老師、該班級的點名資料
+            try {
+                const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'history'));
+                const snap = await getDocs(q);
+                const existingDoc = snap.docs.find(d => {
+                    const data = d.data();
+                    return data.date === today && data.className === className && data.teacher === teacher;
+                });
+
+                if (existingDoc) {
+                    // 顯示確認 Modal
+                    const modal = document.getElementById('attendanceConfirmModal');
+                    modal.classList.remove('hidden');
+
+                    // 處理覆蓋按鈕
+                    document.getElementById('btnConfirmAttendanceOverlap').onclick = async () => {
+                        modal.classList.add('hidden');
+                        try {
+                            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'history', existingDoc.id));
+                            await performAttendanceSubmit(className, teacher, today);
+                        } catch (err) {
+                            console.error(err);
+                            showMessage("覆蓋失敗", "error");
+                        }
+                    };
+
+                    // 處理取消按鈕
+                    document.getElementById('btnCancelAttendanceOverlap').onclick = () => {
+                        modal.classList.add('hidden');
+                        // 恢復原始點名狀態 (清空當前選擇，或者不做任何事讓使用者手動調整)
+                        // 依照需求：恢復原始點名狀態。這裡我們重置下拉選單和列表
+                        document.getElementById('classSelect').value = "";
+                        document.getElementById('studentListArea').innerHTML = '<p class="text-center text-gray-500 py-10">請先選擇班級以載入名單</p>';
+                        document.getElementById('submitArea').classList.add('hidden');
+                        currentAttendanceRecords = {};
+                    };
+                    return;
+                }
+
+                // 若不存在重複，直接提交
+                await performAttendanceSubmit(className, teacher, today);
+
+            } catch (err) {
+                console.error(err);
+                showMessage("檢查重複失敗", "error");
+            }
+        };
+
+        async function performAttendanceSubmit(className, teacher, date) {
             const data = allStudentsData[cleanStr(className)];
             const students = data ? data.students : [];
             const records = students.map((s, idx) => ({ name: s.學生姓名 || s.姓名, status: currentAttendanceRecords[idx] || '到班' }));
+            
             try {
                 await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'history'), {
-                    date: new Date().toLocaleDateString('zh-TW'),
+                    date: date,
                     className: className,
-                    teacher: localStorage.getItem('currentTeacher'),
+                    teacher: teacher,
                     records: records,
                     timestamp: serverTimestamp()
                 });
@@ -1658,11 +1804,12 @@
                 document.getElementById('classSelect').value = "";
                 document.getElementById('studentListArea').innerHTML = '<p class="text-center text-gray-500 py-10">點名完成！</p>';
                 document.getElementById('submitArea').classList.add('hidden');
-            } catch (err) { 
+                currentAttendanceRecords = {};
+            } catch (err) {
                 console.error(err);
-                showMessage("提交失敗", "error"); 
+                showMessage("提交失敗", "error");
             }
-        };
+        }
 
         // ===== 公告匯入處理 =====
         document.getElementById('announcementFile').onchange = (e) => {
@@ -1768,9 +1915,20 @@
             document.getElementById('btnLogin').onclick = () => {
                 const name = document.getElementById('loginTeacherInput').value.trim();
                 if (!name) { showMessage("請輸入姓名", "error"); return; }
+                
+                const cleanName = cleanStr(name);
+                const isTeacher = allTeachersData.some(t => cleanStr(t.teacherName || t.老師姓名 || t.老師 || '') === cleanName);
+                const isAdmin = cleanName === "管理員";
+
+                if (!isTeacher && !isAdmin) {
+                    showMessage("對不起！系統沒有辨識到您的名字<br>或 請您洽詢 輔導室 #282", "error");
+                    return;
+                }
+
                 localStorage.setItem('currentTeacher', name);
                 document.getElementById('displayTeacherName').innerText = name;
                 refreshClassDropdowns(name);
+                loadSavedSignature();
                 document.getElementById('loginSection').classList.add('hidden');
                 document.getElementById('mainSection').classList.remove('hidden');
                 showMessage("登入成功");
@@ -1797,7 +1955,10 @@
                     document.getElementById(`btnTab${t}`).classList.add('active-tab');
                     // 切換到公告頁時重新載入
                     if (t === 'Announcement') loadAnnouncements();
-                    if (t === 'Expense') loadExpenseSheets();
+                    if (t === 'Expense') {
+                        loadExpenseSheets();
+                        loadSavedSignature();
+                    }
                 };
             });
 
@@ -1845,6 +2006,101 @@
                 document.getElementById('expensePreviewModal').classList.add('hidden');
             };
             document.getElementById('btnConfirmExpense').onclick = saveExpenseSheet;
+
+            // 管理員歷史點名資料刪除功能
+            document.getElementById('btnAdminQueryDelete').onclick = async () => {
+                const cls = document.getElementById('adminDeleteClassSelect').value;
+                const teacher = document.getElementById('adminDeleteTeacherSelect').value;
+                const startDate = document.getElementById('adminDeleteStartDate').value;
+                const endDate = document.getElementById('adminDeleteEndDate').value;
+
+                try {
+                    const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'history'));
+                    let logs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+                    // 篩選
+                    if (cls) logs = logs.filter(l => l.className === cls);
+                    if (teacher) logs = logs.filter(l => l.teacher === teacher);
+                    if (startDate) {
+                        const start = new Date(startDate.replace(/-/g, '/'));
+                        logs = logs.filter(l => new Date(l.date.replace(/-/g, '/')) >= start);
+                    }
+                    if (endDate) {
+                        const end = new Date(endDate.replace(/-/g, '/'));
+                        end.setHours(23, 59, 59, 999);
+                        logs = logs.filter(l => new Date(l.date.replace(/-/g, '/')) <= end);
+                    }
+
+                    logs.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+                    const tbody = document.getElementById('adminDeleteTableBody');
+                    if (logs.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-gray-400">查無符合資料</td></tr>';
+                        return;
+                    }
+
+                    tbody.innerHTML = logs.map(l => `
+                        <tr>
+                            <td class="p-3 border text-center"><input type="checkbox" class="admin-delete-checkbox" value="${l.id}"></td>
+                            <td class="p-3 border">${l.date}</td>
+                            <td class="p-3 border">${l.className}</td>
+                            <td class="p-3 border">${l.teacher}</td>
+                            <td class="p-3 border text-center">
+                                <button onclick="deleteSingleHistory('${l.id}')" class="text-red-600 font-bold hover:underline">刪除</button>
+                            </td>
+                        </tr>
+                    `).join('');
+
+                } catch (err) {
+                    console.error(err);
+                    showMessage("查詢失敗", "error");
+                }
+            };
+
+            document.getElementById('adminDeleteSelectAll').onchange = (e) => {
+                const checkboxes = document.querySelectorAll('.admin-delete-checkbox');
+                checkboxes.forEach(cb => cb.checked = e.target.checked);
+            };
+
+            document.getElementById('btnAdminBatchDelete').onclick = async () => {
+                const selected = Array.from(document.querySelectorAll('.admin-delete-checkbox:checked')).map(cb => cb.value);
+                if (selected.length === 0) {
+                    showMessage("請先勾選要刪除的資料", "error");
+                    return;
+                }
+
+                if (!confirm(`確定要刪除這 ${selected.length} 筆資料嗎？此操作無法還原。`)) return;
+
+                const btn = document.getElementById('btnAdminBatchDelete');
+                btn.disabled = true;
+                btn.innerText = '刪除中...';
+
+                try {
+                    for (const id of selected) {
+                        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'history', id));
+                    }
+                    showMessage(`已成功刪除 ${selected.length} 筆資料`);
+                    document.getElementById('btnAdminQueryDelete').click(); // 重新查詢
+                } catch (err) {
+                    console.error(err);
+                    showMessage("部分資料刪除失敗", "error");
+                } finally {
+                    btn.disabled = false;
+                    btn.innerText = '批量刪除所選';
+                }
+            };
+
+            window.deleteSingleHistory = async (id) => {
+                if (!confirm("確定要刪除這筆點名資料嗎？")) return;
+                try {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'history', id));
+                    showMessage("資料已刪除");
+                    document.getElementById('btnAdminQueryDelete').click();
+                } catch (err) {
+                    console.error(err);
+                    showMessage("刪除失敗", "error");
+                }
+            };
 
             document.getElementById('expenseHistorySelect').onchange = (e) => {
                 if (e.target.value) viewExpenseSheet(e.target.value);
