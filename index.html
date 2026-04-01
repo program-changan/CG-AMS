@@ -658,7 +658,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, collection, query, getDocs, addDoc, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, query, getDocs, addDoc, serverTimestamp, deleteDoc, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Firebase Configuration (保持原樣)
         const firebaseConfig = {
@@ -1741,14 +1741,15 @@
 
             // 檢查是否已存在當天、該老師、該班級的點名資料
             try {
-                const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'history'));
+                const q = query(
+                    collection(db, 'artifacts', appId, 'public', 'data', 'history'),
+                    where('date', '==', today),
+                    where('className', '==', className),
+                    where('teacher', '==', teacher)
+                );
                 const snap = await getDocs(q);
-                const existingDoc = snap.docs.find(d => {
-                    const data = d.data();
-                    return data.date === today && data.className === className && data.teacher === teacher;
-                });
 
-                if (existingDoc) {
+                if (!snap.empty) {
                     // 顯示確認 Modal
                     const modal = document.getElementById('attendanceConfirmModal');
                     modal.classList.remove('hidden');
@@ -1757,7 +1758,9 @@
                     document.getElementById('btnConfirmAttendanceOverlap').onclick = async () => {
                         modal.classList.add('hidden');
                         try {
-                            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'history', existingDoc.id));
+                            // 刪除所有符合條件的舊資料 (確保一併覆蓋)
+                            const deletePromises = snap.docs.map(d => deleteDoc(d.ref));
+                            await Promise.all(deletePromises);
                             await performAttendanceSubmit(className, teacher, today);
                         } catch (err) {
                             console.error(err);
@@ -1768,8 +1771,7 @@
                     // 處理取消按鈕
                     document.getElementById('btnCancelAttendanceOverlap').onclick = () => {
                         modal.classList.add('hidden');
-                        // 恢復原始點名狀態 (清空當前選擇，或者不做任何事讓使用者手動調整)
-                        // 依照需求：恢復原始點名狀態。這裡我們重置下拉選單和列表
+                        // 恢復原始點名狀態
                         document.getElementById('classSelect').value = "";
                         document.getElementById('studentListArea').innerHTML = '<p class="text-center text-gray-500 py-10">請先選擇班級以載入名單</p>';
                         document.getElementById('submitArea').classList.add('hidden');
