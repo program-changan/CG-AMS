@@ -968,6 +968,15 @@
             }
         }
 
+        function isCanvasEmpty(canvas) {
+            const ctx = canvas.getContext('2d');
+            const pixelData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+            for (let i = 0; i < pixelData.length; i += 4) {
+                if (pixelData[i + 3] !== 0) return false; // 只要 alpha 頻道不是 0，代表有畫過東西
+            }
+            return true;
+        }
+
         function initSignature() {
             const canvas = document.getElementById('signatureCanvas');
             sigCtx = canvas.getContext('2d');
@@ -1030,13 +1039,19 @@
             const className = document.getElementById('expenseClassSelect').value;
             const arrivalTime = document.getElementById('expenseArrivalTime').value;
             const departureTime = document.getElementById('expenseDepartureTime').value;
+            const canvas = document.getElementById('signatureCanvas');
             
             if (!className || selectedDates.length === 0) {
                 showMessage('請選擇班級與日期', 'error');
                 return;
             }
 
-            const canvas = document.getElementById('signatureCanvas');
+            // 檢查簽名是否為空
+            if (isCanvasEmpty(canvas)) {
+                showMessage("請在老師簽名處簽名，才能生成預覽簽到費用單", "error");
+                return;
+            }
+
             const signatureData = canvas.toDataURL();
 
             // 整理資料
