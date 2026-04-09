@@ -362,7 +362,7 @@
                 <div class="flex space-x-1 overflow-x-auto nav-scroll">
                     <button id="btnTabAttendance" class="px-4 py-2 active-tab whitespace-nowrap">即時點名</button>
                     <button id="btnTabStudents" class="px-4 py-2 whitespace-nowrap">學生資訊</button>
-                    <button id="btnTabHistory" class="px-4 py-2 whitespace-nowrap">歷史記錄</button>
+                    <button id="btnTabHistory" class="px-4 py-2 whitespace-nowrap">歷史紀錄</button>
                     <button id="btnTabExpense" class="px-4 py-2 whitespace-nowrap">簽到費用單</button>
                     <button id="btnTabAnnouncement" class="px-4 py-2 whitespace-nowrap">公告事項</button>
                     <button id="btnTabAdmin" class="hidden px-4 py-2 whitespace-nowrap">系統管理</button>
@@ -410,9 +410,9 @@
                 </div>
             </div>
 
-            <!-- 分頁：歷史記錄 -->
+            <!-- 分頁：歷史紀錄 -->
             <div id="historyPage" class="hidden bg-white rounded-xl shadow-md p-6">
-                <h3 class="text-xl font-bold mb-4 border-l-4 border-yellow-600 pl-3">點名記錄查詢</h3>
+                <h3 class="text-xl font-bold mb-4 border-l-4 border-yellow-600 pl-3">點名紀錄查詢</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                     <div>
                         <label class="block text-sm font-bold mb-2">選擇班級</label>
@@ -447,7 +447,7 @@
                                 <th class="p-3 border">日期</th>
                                 <th class="p-3 border">班級</th>
                                 <th class="p-3 border">點名老師</th>
-                                <th class="p-3 border">記錄詳情</th>
+                                <th class="p-3 border">紀錄詳情</th>
                             </tr>
                         </thead>
                         <tbody id="historyTableBody">
@@ -466,7 +466,7 @@
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-2">歷史簽到費用單</label>
                         <select id="expenseHistorySelect" class="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-indigo-500 outline-none">
-                            <option value="">-- 查看歷史記錄 --</option>
+                            <option value="">-- 查看歷史紀錄 --</option>
                         </select>
                         <div id="adminExpenseList" class="hidden mt-4 space-y-2 max-h-60 overflow-y-auto border p-2 rounded bg-gray-50">
                             <!-- 管理員可見的完整列表 -->
@@ -597,6 +597,22 @@
                             <div id="adminAnnouncementList" class="space-y-2 max-h-60 overflow-y-auto">
                                 <p class="text-xs text-gray-400 text-center">載入中...</p>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 查詢教師簽名 (管理員專用) -->
+                <div class="mt-12 border-t-2 border-gray-100 pt-8">
+                    <h4 class="text-xl font-bold mb-6 text-indigo-700 flex items-center">
+                        <span class="mr-2">✍️</span> 查看教師簽名樣式
+                    </h4>
+                    <div class="bg-indigo-50 p-6 rounded-2xl border border-indigo-100 max-w-md">
+                        <label class="block text-sm font-bold text-gray-700 mb-2">選擇老師</label>
+                        <select id="adminViewTeacherSigSelect" class="w-full p-3 border rounded-lg bg-white mb-4 focus:ring-2 focus:ring-indigo-500 outline-none">
+                            <option value="">-- 請選擇老師 --</option>
+                        </select>
+                        <div id="adminSigDisplayArea" class="bg-white rounded-xl border border-indigo-100 p-4 min-h-[150px] flex items-center justify-center">
+                            <p class="text-gray-400 text-sm">請選擇老師以顯示簽名</p>
                         </div>
                     </div>
                 </div>
@@ -850,7 +866,7 @@
 
                 let mySheets = isAdmin ? allExpenseSheets : allExpenseSheets.filter(s => cleanStr(s.teacherName) === cleanStr(currentTeacher));
                 
-                select.innerHTML = '<option value="">-- 查看歷史記錄 --</option>';
+                select.innerHTML = '<option value="">-- 查看歷史紀錄 --</option>';
                 mySheets.forEach((s, idx) => {
                     const dateStr = s.createdAt ? new Date(s.createdAt.seconds * 1000).toLocaleDateString('zh-TW') : '未知';
                     select.add(new Option(`${dateStr} - ${s.className}`, s.id));
@@ -873,6 +889,7 @@
                                 </div>
                                 <div class="flex gap-2">
                                     <button onclick="viewExpenseSheet('${s.id}')" class="text-blue-500 hover:text-blue-700 font-bold">查看</button>
+                                    <button onclick="editExpenseSheet('${s.id}')" class="text-green-500 hover:text-green-700 font-bold">修改</button>
                                     <button onclick="deleteExpenseSheet('${s.id}')" class="text-red-500 hover:text-red-700 font-bold">刪除</button>
                                 </div>
                             </div>
@@ -891,6 +908,15 @@
             renderExpensePreview(sheet.renderData, true); // true means view only
         };
 
+        window.editExpenseSheet = (id) => {
+            const sheet = allExpenseSheets.find(s => s.id === id);
+            if (!sheet) return;
+            // 載入該費用單的資料到預覽變數中，並開啟可編輯預覽
+            currentPreviewData = JSON.parse(JSON.stringify(sheet.renderData));
+            currentPreviewData.id = id; // 存儲 ID 以供後續更新
+            renderExpensePreview(currentPreviewData, false); // false means editable
+        };
+
         window.deleteExpenseSheet = async (id) => {
             if (!confirm('確定要刪除此費用單嗎？')) return;
             try {
@@ -902,6 +928,45 @@
                 showMessage('刪除失敗', 'error');
             }
         };
+
+        // 判斷是否為辦公日 (排除週末及政府公告放假日)
+        function isWorkingDay(dateStr) {
+            const date = new Date(dateStr.replace(/-/g, '/'));
+            const year = date.getFullYear();
+            const month = date.getMonth() + 1;
+            const day = date.getDate();
+            const dayOfWeek = date.getDay();
+            
+            // 2026年 (民國115年) 政府行政機關辦公日曆表
+            if (year === 2026) {
+                const holidays2026 = {
+                    1: [1, 3, 4, 10, 11, 17, 18, 24, 25, 31],
+                    2: [1, 7, 8, 14, 15, 16, 17, 18, 19, 20, 21, 22, 28],
+                    3: [1, 7, 8, 14, 15, 21, 22, 28, 29],
+                    4: [3, 4, 5, 6, 11, 12, 18, 19, 25, 26],
+                    5: [1, 2, 3, 9, 10, 11, 16, 17, 23, 24, 30, 31],
+                    6: [6, 7, 13, 14, 19, 20, 21, 27, 28],
+                    7: [4, 5, 11, 12, 18, 19, 25, 26],
+                    8: [1, 2, 8, 9, 15, 16, 22, 23, 29, 30],
+                    9: [5, 6, 12, 13, 19, 20, 25, 26, 27],
+                    10: [3, 4, 9, 10, 11, 17, 18, 24, 25, 31],
+                    11: [1, 7, 8, 14, 15, 21, 22, 28, 29],
+                    12: [5, 6, 12, 13, 19, 20, 26, 27]
+                };
+                if (holidays2026[month] && holidays2026[month].includes(day)) {
+                    return false;
+                }
+                return true;
+            }
+
+            // 非2026年的通用邏輯 (僅供參考)
+            if (dayOfWeek === 0 || dayOfWeek === 6) return false;
+            
+            const fixedHolidays = ['01-01', '02-28', '04-04', '04-05', '05-01', '10-10'];
+            if (fixedHolidays.includes(dateStr.slice(5))) return false;
+            
+            return true;
+        }
 
         // 日曆邏輯
         function renderCalendar() {
@@ -928,15 +993,22 @@
             const today = new Date();
             for (let i = 1; i <= daysInMonth; i++) {
                 const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+                const isWork = isWorkingDay(dateStr);
                 const isSelected = selectedDates.includes(dateStr);
                 const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === i;
-                html += `<div class="calendar-day ${isSelected ? 'selected' : ''} ${isToday ? 'today' : ''}" onclick="toggleDate('${dateStr}')">${i}</div>`;
+                
+                const holidayClass = !isWork ? 'opacity-40 cursor-not-allowed bg-red-50 text-red-300' : '';
+                html += `<div class="calendar-day ${isSelected ? 'selected' : ''} ${isToday ? 'today' : ''} ${holidayClass}" onclick="toggleDate('${dateStr}')">${i}</div>`;
             }
             
             grid.innerHTML = html;
         }
 
         window.toggleDate = (dateStr) => {
+            if (!isWorkingDay(dateStr)) {
+                showMessage("此日期為非上班日", "error");
+                return;
+            }
             const idx = selectedDates.indexOf(dateStr);
             if (idx > -1) {
                 selectedDates.splice(idx, 1);
@@ -949,22 +1021,47 @@
         // 簽名邏輯
         let sigCtx, sigDrawing = false;
 
-        function loadSavedSignature() {
+        async function loadSavedSignature() {
             const canvas = document.getElementById('signatureCanvas');
             if (!canvas) return;
             const ctx = canvas.getContext('2d');
             const teacher = localStorage.getItem('currentTeacher');
             if (!teacher) return;
-            const saved = localStorage.getItem(`sig_${teacher}`);
-            if (saved) {
-                const img = new Image();
-                img.onload = () => {
+            
+            // 優先從 Firebase 載入以實現跨裝置同步
+            try {
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'signatures', teacher);
+                const docSnap = await getDoc(docRef);
+                let saved = null;
+                if (docSnap.exists()) {
+                    saved = docSnap.data().signature;
+                } else {
+                    // 退而求其次從本地載入舊資料（遷移用）
+                    saved = localStorage.getItem(`sig_${teacher}`);
+                }
+
+                if (saved) {
+                    const img = new Image();
+                    img.onload = () => {
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        ctx.drawImage(img, 0, 0);
+                    };
+                    img.src = saved;
+                } else {
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
-                    ctx.drawImage(img, 0, 0);
-                };
-                img.src = saved;
-            } else {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                }
+            } catch (err) {
+                console.error("載入簽名失敗:", err);
+                // 發生錯誤時嘗試本地
+                const localSaved = localStorage.getItem(`sig_${teacher}`);
+                if (localSaved) {
+                    const img = new Image();
+                    img.onload = () => {
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        ctx.drawImage(img, 0, 0);
+                    };
+                    img.src = localSaved;
+                }
             }
         }
 
@@ -977,7 +1074,7 @@
             return true;
         }
 
-        function initSignature() {
+        async function initSignature() {
             const canvas = document.getElementById('signatureCanvas');
             sigCtx = canvas.getContext('2d');
             sigCtx.lineWidth = 3;
@@ -1003,7 +1100,30 @@
             canvas.addEventListener('touchend', end);
 
             // 載入快取的簽名
-            loadSavedSignature();
+            await loadSavedSignature();
+        }
+
+        // 根據班級與日期判斷預設到勤時間
+        function getDefaultArrivalTime(className, dateStr) {
+            const date = new Date(dateStr.replace(/-/g, '/'));
+            const dayOfWeek = date.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+            const c = cleanStr(className);
+            
+            if (['1A', '1B', '2A', '2B'].some(v => c.includes(v))) {
+                return (dayOfWeek === 2) ? "16:00" : "12:40";
+            } else if (['3A', '中年級混合', '4A', '4B'].some(v => c.includes(v))) {
+                return (dayOfWeek === 3 || dayOfWeek === 5) ? "12:40" : "16:00";
+            } else if (['5A', '5B', '6A', '6B'].some(v => c.includes(v))) {
+                return (dayOfWeek === 3) ? "12:40" : "16:00";
+            }
+            return "12:40"; // 預設值
+        }
+
+        // 根據日期取得星期幾 (中文字)
+        function getWeekdayChinese(dateStr) {
+            const date = new Date(dateStr.replace(/-/g, '/'));
+            const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+            return weekdays[date.getDay()];
         }
 
         // 時間預設邏輯
@@ -1011,24 +1131,11 @@
             const className = document.getElementById('expenseClassSelect').value;
             if (!className || selectedDates.length === 0) return;
             
-            const firstDate = new Date(selectedDates[0]);
-            const dayOfWeek = firstDate.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
-            
+            const firstDateStr = selectedDates[0];
             const arrivalSelect = document.getElementById('expenseArrivalTime');
             const departureSelect = document.getElementById('expenseDepartureTime');
             
-            const c = cleanStr(className);
-            
-            // Logic based on requirements
-            if (['1A', '1B', '2A', '2B'].some(v => c.includes(v))) {
-                arrivalSelect.value = (dayOfWeek === 2) ? "16:00" : "12:40";
-            } else if (['3A', '中年級混合', '4A', '4B'].some(v => c.includes(v))) {
-                arrivalSelect.value = (dayOfWeek === 3 || dayOfWeek === 5) ? "12:40" : "16:00";
-            } else if (['5A', '5B', '6A', '6B'].some(v => c.includes(v))) {
-                arrivalSelect.value = (dayOfWeek === 3) ? "12:40" : "16:00";
-            }
-            
-            // Default departure
+            arrivalSelect.value = getDefaultArrivalTime(className, firstDateStr);
             departureSelect.value = "18:20";
         }
 
@@ -1060,14 +1167,17 @@
             const month = new Date(dates[0]).getMonth() + 1;
 
             const items = dates.map(d => {
-                const dateObj = new Date(d);
+                const dateObj = new Date(d.replace(/-/g, '/'));
                 const day = dateObj.getDay();
-                // 這裡可以根據日期再細分到勤/退勤時間，但目前先用統一的
+                // 這裡根據班級與日期動態決定到勤時間
+                const dynamicArrival = getDefaultArrivalTime(className, d);
+                const dynamicDeparture = "18:20"; // 預設退勤為 18:20
+                
                 return {
                     date: d,
-                    arrival: arrivalTime,
-                    departure: departureTime,
-                    sessions: calculateSessions(arrivalTime, departureTime)
+                    arrival: dynamicArrival,
+                    departure: dynamicDeparture,
+                    sessions: calculateSessions(dynamicArrival, dynamicDeparture)
                 };
             });
 
@@ -1115,6 +1225,28 @@
             return result.replace(/零+$/, '') + '元整';
         }
 
+        window.updatePreviewItem = (idx, field, value) => {
+            if (!currentPreviewData || !currentPreviewData.items[idx]) return;
+            currentPreviewData.items[idx][field] = value;
+            currentPreviewData.items[idx].sessions = calculateSessions(
+                currentPreviewData.items[idx].arrival,
+                currentPreviewData.items[idx].departure
+            );
+            renderExpensePreview(currentPreviewData, false);
+        };
+
+        window.removePreviewItem = (idx) => {
+            if (!currentPreviewData || !currentPreviewData.items[idx]) return;
+            if (!confirm("確定要移除此日期嗎？")) return;
+            currentPreviewData.items.splice(idx, 1);
+            if (currentPreviewData.items.length === 0) {
+                document.getElementById('expensePreviewModal').classList.add('hidden');
+                showMessage("已移除所有日期");
+            } else {
+                renderExpensePreview(currentPreviewData, false);
+            }
+        };
+
         function renderExpensePreview(data, viewOnly = false) {
             const modal = document.getElementById('expensePreviewModal');
             
@@ -1155,7 +1287,7 @@
                         </tr>
                         <tr>
                             <th class="w-16 font-bold py-1 text-[12px]">到勤日</th>
-                            ${cols.map(c => `<td class="leading-tight font-bold text-[10px]">${c ? c.date.split('-')[1] + '<br>/<br>' + c.date.split('-')[2] : ''}</td>`).join('')}
+                            ${cols.map(c => `<td class="leading-tight font-bold text-[10px]">${c ? c.date.split('-')[1] + '<br>/<br>' + c.date.split('-')[2] + '<br>(' + getWeekdayChinese(c.date) + ')' : ''}</td>`).join('')}
                         </tr>
                         <tr>
                             <th class="w-16 font-bold py-1 text-[12px]">到勤時間</th>
@@ -1378,34 +1510,45 @@
             renderExpensePreview(currentPreviewData);
         };
 
-        window.removePreviewItem = (idx) => {
-            if (!currentPreviewData) return;
-            currentPreviewData.items.splice(idx, 1);
-            renderExpensePreview(currentPreviewData);
-        };
-
         async function saveExpenseSheet() {
             if (!auth.currentUser || !currentPreviewData) return;
             const btn = document.getElementById('btnConfirmExpense');
+            const originalText = btn.innerText;
             btn.innerText = '儲存中...';
             btn.disabled = true;
             try {
-                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'expenseSheets'), {
+                const sheetData = {
                     teacherName: currentPreviewData.teacherName,
                     className: currentPreviewData.className,
                     year: currentPreviewData.year,
                     month: currentPreviewData.month,
                     renderData: currentPreviewData,
                     createdAt: serverTimestamp()
-                });
-                showMessage('簽到費用單已儲存');
+                };
+
+                if (currentPreviewData.id) {
+                    // 如果有 ID，表示是修改現有資料
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'expenseSheets', currentPreviewData.id), sheetData);
+                    showMessage('簽到費用單已更新');
+                } else {
+                    // 否則新增
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'expenseSheets'), sheetData);
+                    showMessage('簽到費用單已儲存');
+                }
+                
                 document.getElementById('expensePreviewModal').classList.add('hidden');
+                
+                // 清除已選擇的日期，方便下次選擇
+                selectedDates = [];
+                const dateText = document.getElementById('selectedDatesText');
+                if (dateText) dateText.innerText = '尚未選擇日期';
+                
                 await loadExpenseSheets();
             } catch (err) {
                 console.error(err);
                 showMessage('儲存失敗', 'error');
             } finally {
-                btn.innerText = '確認生成';
+                btn.innerText = originalText;
                 btn.disabled = false;
             }
         }
@@ -1434,6 +1577,10 @@
                 // 初始化管理員刪除功能的下拉選單
                 const adminDeleteClassSelect = document.getElementById('adminDeleteClassSelect');
                 const adminDeleteTeacherSelect = document.getElementById('adminDeleteTeacherSelect');
+                const adminViewTeacherSigSelect = document.getElementById('adminViewTeacherSigSelect');
+
+                const teachers = [...new Set(allTeachersData.map(t => t.teacherName || t.老師姓名 || t.老師 || '').filter(t => t))].sort();
+
                 if (adminDeleteClassSelect && adminDeleteTeacherSelect) {
                     adminDeleteClassSelect.innerHTML = '<option value="">-- 所有班級 --</option>';
                     Object.keys(allStudentsData).sort().forEach(cls => {
@@ -1441,8 +1588,35 @@
                     });
                     
                     adminDeleteTeacherSelect.innerHTML = '<option value="">-- 所有老師 --</option>';
-                    const teachers = [...new Set(allTeachersData.map(t => t.teacherName || t.老師姓名 || t.老師 || '').filter(t => t))].sort();
                     teachers.forEach(t => adminDeleteTeacherSelect.add(new Option(t, t)));
+                }
+
+                if (adminViewTeacherSigSelect) {
+                    adminViewTeacherSigSelect.innerHTML = '<option value="">-- 請選擇老師 --</option>';
+                    teachers.forEach(t => adminViewTeacherSigSelect.add(new Option(t, t)));
+                    
+                    adminViewTeacherSigSelect.onchange = async (e) => {
+                        const teacher = e.target.value;
+                        const displayArea = document.getElementById('adminSigDisplayArea');
+                        if (!teacher) {
+                            displayArea.innerHTML = '<p class="text-gray-400 text-sm">請選擇老師以顯示簽名</p>';
+                            return;
+                        }
+                        displayArea.innerHTML = '<p class="text-gray-400 text-sm animate-pulse">載入中...</p>';
+                        try {
+                            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'signatures', teacher);
+                            const docSnap = await getDoc(docRef);
+                            if (docSnap.exists()) {
+                                const data = docSnap.data();
+                                displayArea.innerHTML = `<img src="${data.signature}" class="max-h-40 object-contain shadow-inner rounded border">`;
+                            } else {
+                                displayArea.innerHTML = '<p class="text-red-400 text-sm">該老師尚未在系統存儲簽名</p>';
+                            }
+                        } catch (err) {
+                            console.error(err);
+                            displayArea.innerHTML = '<p class="text-red-400 text-sm">載入失敗</p>';
+                        }
+                    };
                 }
             } catch (error) { 
                 console.error("同步失敗:", error); 
@@ -1921,6 +2095,7 @@
                         document.getElementById('loginSection').classList.add('hidden');
                         document.getElementById('mainSection').classList.remove('hidden');
                         refreshClassDropdowns(saved);
+                        await loadSavedSignature();
                     }
                 }
             });
@@ -1929,7 +2104,7 @@
                 showMessage("系統連線失敗，請重新整理頁面", "error");
             });
 
-            document.getElementById('btnLogin').onclick = () => {
+            document.getElementById('btnLogin').onclick = async () => {
                 const name = document.getElementById('loginTeacherInput').value.trim();
                 if (!name) { showMessage("請輸入姓名", "error"); return; }
                 
@@ -1945,7 +2120,7 @@
                 localStorage.setItem('currentTeacher', name);
                 document.getElementById('displayTeacherName').innerText = name;
                 refreshClassDropdowns(name);
-                loadSavedSignature();
+                await loadSavedSignature();
                 document.getElementById('loginSection').classList.add('hidden');
                 document.getElementById('mainSection').classList.remove('hidden');
                 showMessage("登入成功");
@@ -1960,7 +2135,7 @@
             // 更新分頁切換邏輯，加入 Expense
             const tabs = ['Attendance', 'Students', 'History', 'Expense', 'Announcement', 'Admin'];
             tabs.forEach(t => {
-                document.getElementById(`btnTab${t}`).onclick = () => {
+                document.getElementById(`btnTab${t}`).onclick = async () => {
                     if (t === 'Admin' && cleanStr(localStorage.getItem('currentTeacher')) !== "管理員") {
                         showMessage("權限不足", "error"); return;
                     }
@@ -1971,10 +2146,10 @@
                     document.getElementById(`${t.toLowerCase()}Page`).classList.remove('hidden');
                     document.getElementById(`btnTab${t}`).classList.add('active-tab');
                     // 切換到公告頁時重新載入
-                    if (t === 'Announcement') loadAnnouncements();
+                    if (t === 'Announcement') await loadAnnouncements();
                     if (t === 'Expense') {
-                        loadExpenseSheets();
-                        loadSavedSignature();
+                        await loadExpenseSheets();
+                        await loadSavedSignature();
                     }
                 };
             });
@@ -2011,11 +2186,27 @@
                 const ctx = canvas.getContext('2d');
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
             };
-            document.getElementById('btnConfirmSignature').onclick = () => {
+            document.getElementById('btnConfirmSignature').onclick = async () => {
                 const canvas = document.getElementById('signatureCanvas');
                 const data = canvas.toDataURL();
-                localStorage.setItem(`sig_${localStorage.getItem('currentTeacher')}`, data);
-                showMessage('簽名已儲存');
+                const teacher = localStorage.getItem('currentTeacher');
+                if (!teacher) return;
+                
+                try {
+                    // 同步到 Firebase 以實現跨裝置
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'signatures', teacher), {
+                        signature: data,
+                        updatedAt: serverTimestamp()
+                    });
+                    
+                    // 傳統本地存儲保留一份作為快取
+                    localStorage.setItem(`sig_${teacher}`, data);
+                    showMessage('簽名已跨裝置同步存儲');
+                } catch (err) {
+                    console.error("儲存簽名失敗:", err);
+                    localStorage.setItem(`sig_${teacher}`, data);
+                    showMessage('儲存失敗，僅存儲於此裝置', 'error');
+                }
             };
 
             document.getElementById('btnGenerateExpense').onclick = generateExpensePreview;
@@ -2123,7 +2314,7 @@
                 if (e.target.value) viewExpenseSheet(e.target.value);
             };
 
-            initSignature();
+            await initSignature();
         };
 
         if (document.readyState === 'loading') {
