@@ -2245,7 +2245,7 @@
             
             let loginTime = localStorage.getItem('loginTime');
             if (!loginTime) {
-                // 如果沒有登入時間但老師已在系統內，補上現在時間
+                // 向後相容：如果沒有登入時間（舊程式登入的老師），補上現在時間當作登入點
                 loginTime = Date.now().toString();
                 localStorage.setItem('loginTime', loginTime);
             }
@@ -2254,13 +2254,17 @@
             const remaining = SESSION_DURATION - elapsed;
 
             if (remaining <= 0) {
-                alert("登入工作階段已達 1.2 小時，系統將自動登出。");
-                logout();
+                // 已過期，直接執行登出
+                localStorage.removeItem('currentTeacher');
+                localStorage.removeItem('loginTime');
+                location.reload(); 
+                return true; // 代表已過期
             } else {
                 autoLogoutTimer = setTimeout(() => {
                     alert("登入工作階段已達 1.2 小時，系統將自動登出。");
                     logout();
                 }, remaining);
+                return false; // 代表未過期
             }
         }
 
@@ -2271,6 +2275,9 @@
         }
 
         const init = async () => {
+            // 啟動時立即檢查一次是否過期
+            if (startSessionTimer()) return; 
+
             onAuthStateChanged(auth, async (u) => {
                 user = u;
                 if (user) {
