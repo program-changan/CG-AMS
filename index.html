@@ -91,6 +91,12 @@
         .nav-scroll::-webkit-scrollbar { height: 4px; }
         .nav-scroll::-webkit-scrollbar-thumb { background: #ddd; border-radius: 10px; }
 
+        /* 嘗試強制停用密碼框的 IME (輸入法) */
+        input[type="password"], .force-latin {
+            ime-mode: disabled !important;
+            -webkit-ime-mode: disabled !important;
+        }
+
         /* 公告事項樣式 */
         .announcement-card {
             transition: all 0.2s;
@@ -348,7 +354,83 @@
                         <label class="block text-xl font-black text-black mb-2">老師姓名</label>
                         <input type="text" id="loginTeacherInput" placeholder="請輸入您的姓名" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-lg">
                     </div>
+                    <div>
+                        <label class="block text-xl font-black text-black mb-2">登入密碼</label>
+                        <div class="relative">
+                            <input type="password" id="loginPasswordInput" placeholder="初始密碼為 123456" 
+                                   lang="en-US" inputmode="email" spellcheck="false"
+                                   autocapitalize="none" autocorrect="off" autocomplete="current-password"
+                                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-lg pr-12 force-latin">
+                            <button type="button" onclick="togglePasswordVisibility('loginPasswordInput', this)" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-purple-600 focus:outline-none p-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div id="imeWarning_loginPasswordInput" class="hidden text-red-500 text-xs font-bold mt-1">⚠️ 目前為中文輸入模式，請按 Shift 切換至英文</div>
+                        <p class="text-xs text-gray-500 mt-2">※ 忘記密碼請洽輔導室 #282</p>
+                    </div>
                     <button id="btnLogin" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-lg transition duration-200 text-lg shadow-lg">登入系統</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 修改密碼 Modal -->
+        <div id="changePasswordModal" class="fixed inset-0 bg-black bg-opacity-50 z-[300] hidden flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
+                <h3 class="text-2xl font-bold mb-6 text-purple-700 border-l-4 border-purple-600 pl-3">安全性設定：修改密碼</h3>
+                <div class="space-y-4">
+                    <p class="text-sm text-red-500 font-bold" id="forceChangeHint" style="display:none;">※ 偵測到您是第一次登入，請先修改初始密碼</p>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">目前密碼</label>
+                        <div class="relative">
+                            <input type="password" id="currentPasswordInput" lang="en-US" inputmode="email" spellcheck="false"
+                                   autocapitalize="none" autocorrect="off" autocomplete="current-password"
+                                   class="w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-purple-500 pr-12 force-latin">
+                            <button type="button" onclick="togglePasswordVisibility('currentPasswordInput', this)" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-purple-600 focus:outline-none p-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div id="imeWarning_currentPasswordInput" class="hidden text-red-500 text-[10px] font-bold mt-1">⚠️ 目前為中文模式</div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">新密碼</label>
+                        <div class="relative">
+                            <input type="password" id="newPasswordInput" placeholder="需 6 位數，含大小寫英文及數字/符號" lang="en-US" inputmode="email" spellcheck="false"
+                                   autocapitalize="none" autocorrect="off" autocomplete="new-password"
+                                   class="w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-purple-500 pr-12 force-latin">
+                            <button type="button" onclick="togglePasswordVisibility('newPasswordInput', this)" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-purple-600 focus:outline-none p-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div id="imeWarning_newPasswordInput" class="hidden text-red-500 text-[10px] font-bold mt-1">⚠️ 目前為中文模式</div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">確認新密碼</label>
+                        <div class="relative">
+                            <input type="password" id="confirmNewPasswordInput" lang="en-US" inputmode="email" spellcheck="false"
+                                   autocapitalize="none" autocorrect="off" autocomplete="new-password"
+                                   class="w-full p-3 border rounded-lg outline-none focus:ring-2 focus:ring-purple-500 pr-12 force-latin">
+                            <button type="button" onclick="togglePasswordVisibility('confirmNewPasswordInput', this)" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-purple-600 focus:outline-none p-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div id="imeWarning_confirmNewPasswordInput" class="hidden text-red-500 text-[10px] font-bold mt-1">⚠️ 目前為中文模式</div>
+                    </div>
+                    <div class="pt-4 flex gap-3">
+                        <button id="btnCancelChangePassword" class="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold hover:bg-gray-200 transition">取消</button>
+                        <button id="btnConfirmChangePassword" class="flex-1 py-3 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 transition shadow-lg">確認修改</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -362,10 +444,11 @@
                 <div class="flex space-x-1 overflow-x-auto nav-scroll">
                     <button id="btnTabAttendance" class="px-4 py-2 active-tab whitespace-nowrap">即時點名</button>
                     <button id="btnTabStudents" class="px-4 py-2 whitespace-nowrap">學生資訊</button>
-                    <button id="btnTabHistory" class="px-4 py-2 whitespace-nowrap">歷史紀錄</button>
+                    <button id="btnTabHistory" class="px-4 py-2 whitespace-nowrap">歷史記錄</button>
                     <button id="btnTabExpense" class="px-4 py-2 whitespace-nowrap">簽到費用單</button>
                     <button id="btnTabAnnouncement" class="px-4 py-2 whitespace-nowrap">公告事項</button>
                     <button id="btnTabAdmin" class="hidden px-4 py-2 whitespace-nowrap">系統管理</button>
+                    <button id="btnOpenChangePassword" class="px-4 py-2 text-indigo-600 font-bold whitespace-nowrap">修改密碼</button>
                     <button id="btnLogout" class="px-4 py-2 text-red-600 font-bold ml-4 whitespace-nowrap">登出</button>
                 </div>
             </div>
@@ -410,9 +493,9 @@
                 </div>
             </div>
 
-            <!-- 分頁：歷史紀錄 -->
+            <!-- 分頁：歷史記錄 -->
             <div id="historyPage" class="hidden bg-white rounded-xl shadow-md p-6">
-                <h3 class="text-xl font-bold mb-4 border-l-4 border-yellow-600 pl-3">點名紀錄查詢</h3>
+                <h3 class="text-xl font-bold mb-4 border-l-4 border-yellow-600 pl-3">點名記錄查詢</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                     <div>
                         <label class="block text-sm font-bold mb-2">選擇班級</label>
@@ -447,7 +530,7 @@
                                 <th class="p-3 border">日期</th>
                                 <th class="p-3 border">班級</th>
                                 <th class="p-3 border">點名老師</th>
-                                <th class="p-3 border">紀錄詳情</th>
+                                <th class="p-3 border">記錄詳情</th>
                             </tr>
                         </thead>
                         <tbody id="historyTableBody">
@@ -466,7 +549,7 @@
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-2">歷史簽到費用單</label>
                         <select id="expenseHistorySelect" class="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-indigo-500 outline-none">
-                            <option value="">-- 查看歷史紀錄 --</option>
+                            <option value="">-- 查看歷史記錄 --</option>
                         </select>
                         <div id="adminExpenseList" class="hidden mt-4 space-y-2 max-h-60 overflow-y-auto border p-2 rounded bg-gray-50">
                             <!-- 管理員可見的完整列表 -->
@@ -602,17 +685,30 @@
                 </div>
 
                 <!-- 查詢教師簽名 (管理員專用) -->
-                <div class="mt-12 border-t-2 border-gray-100 pt-8">
-                    <h4 class="text-xl font-bold mb-6 text-indigo-700 flex items-center">
-                        <span class="mr-2">✍️</span> 查看教師簽名樣式
-                    </h4>
-                    <div class="bg-indigo-50 p-6 rounded-2xl border border-indigo-100 max-w-md">
+                <div class="mt-12 border-t-2 border-gray-100 pt-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="bg-indigo-50 p-6 rounded-2xl border border-indigo-100">
+                        <h4 class="text-xl font-bold mb-6 text-indigo-700 flex items-center">
+                            <span class="mr-2">✍️</span> 查看教師簽名樣式
+                        </h4>
                         <label class="block text-sm font-bold text-gray-700 mb-2">選擇老師</label>
                         <select id="adminViewTeacherSigSelect" class="w-full p-3 border rounded-lg bg-white mb-4 focus:ring-2 focus:ring-indigo-500 outline-none">
                             <option value="">-- 請選擇老師 --</option>
                         </select>
                         <div id="adminSigDisplayArea" class="bg-white rounded-xl border border-indigo-100 p-4 min-h-[150px] flex items-center justify-center">
                             <p class="text-gray-400 text-sm">請選擇老師以顯示簽名</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-purple-50 p-6 rounded-2xl border border-purple-100">
+                        <h4 class="text-xl font-bold mb-6 text-purple-700 flex items-center">
+                            <span class="mr-2">🔑</span> 查看教師登入密碼
+                        </h4>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">選擇老師</label>
+                        <select id="adminViewTeacherPwdSelect" class="w-full p-3 border rounded-lg bg-white mb-4 focus:ring-2 focus:ring-purple-500 outline-none">
+                            <option value="">-- 請選擇老師 --</option>
+                        </select>
+                        <div id="adminPwdDisplayArea" class="bg-white rounded-xl border border-purple-100 p-4 flex items-center justify-center">
+                            <p class="text-gray-400 text-sm">請選擇老師以顯示密碼</p>
                         </div>
                     </div>
                 </div>
@@ -866,7 +962,7 @@
 
                 let mySheets = isAdmin ? allExpenseSheets : allExpenseSheets.filter(s => cleanStr(s.teacherName) === cleanStr(currentTeacher));
                 
-                select.innerHTML = '<option value="">-- 查看歷史紀錄 --</option>';
+                select.innerHTML = '<option value="">-- 查看歷史記錄 --</option>';
                 mySheets.forEach((s, idx) => {
                     const dateStr = s.createdAt ? new Date(s.createdAt.seconds * 1000).toLocaleDateString('zh-TW') : '未知';
                     select.add(new Option(`${dateStr} - ${s.className}`, s.id));
@@ -944,7 +1040,7 @@
                     2: [1, 7, 8, 14, 15, 16, 17, 18, 19, 20, 21, 22, 28],
                     3: [1, 7, 8, 14, 15, 21, 22, 28, 29],
                     4: [3, 4, 5, 6, 11, 12, 18, 19, 25, 26],
-                    5: [1, 2, 3, 9, 10, 11, 16, 17, 23, 24, 30, 31],
+                    5: [1, 2, 3, 9, 10, 16, 17, 23, 24, 30, 31],
                     6: [6, 7, 13, 14, 19, 20, 21, 27, 28],
                     7: [4, 5, 11, 12, 18, 19, 25, 26],
                     8: [1, 2, 8, 9, 15, 16, 22, 23, 29, 30],
@@ -1578,6 +1674,7 @@
                 const adminDeleteClassSelect = document.getElementById('adminDeleteClassSelect');
                 const adminDeleteTeacherSelect = document.getElementById('adminDeleteTeacherSelect');
                 const adminViewTeacherSigSelect = document.getElementById('adminViewTeacherSigSelect');
+                const adminViewTeacherPwdSelect = document.getElementById('adminViewTeacherPwdSelect');
 
                 const teachers = [...new Set(allTeachersData.map(t => t.teacherName || t.老師姓名 || t.老師 || '').filter(t => t))].sort();
 
@@ -1611,6 +1708,34 @@
                                 displayArea.innerHTML = `<img src="${data.signature}" class="max-h-40 object-contain shadow-inner rounded border">`;
                             } else {
                                 displayArea.innerHTML = '<p class="text-red-400 text-sm">該老師尚未在系統存儲簽名</p>';
+                            }
+                        } catch (err) {
+                            console.error(err);
+                            displayArea.innerHTML = '<p class="text-red-400 text-sm">載入失敗</p>';
+                        }
+                    };
+                }
+
+                if (adminViewTeacherPwdSelect) {
+                    adminViewTeacherPwdSelect.innerHTML = '<option value="">-- 請選擇老師 --</option>';
+                    teachers.forEach(t => adminViewTeacherPwdSelect.add(new Option(t, t)));
+                    
+                    adminViewTeacherPwdSelect.onchange = async (e) => {
+                        const teacher = e.target.value;
+                        const displayArea = document.getElementById('adminPwdDisplayArea');
+                        if (!teacher) {
+                            displayArea.innerHTML = '<p class="text-gray-400 text-sm">請選擇老師以顯示密碼</p>';
+                            return;
+                        }
+                        displayArea.innerHTML = '<p class="text-gray-400 text-sm animate-pulse">載入中...</p>';
+                        try {
+                            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'passwords', cleanStr(teacher));
+                            const docSnap = await getDoc(docRef);
+                            if (docSnap.exists()) {
+                                const data = docSnap.data();
+                                displayArea.innerHTML = `<div class="text-2xl font-black text-purple-700 tracking-widest bg-white px-6 py-2 rounded-lg border-2 border-purple-200 shadow-inner">${data.password}</div>`;
+                            } else {
+                                displayArea.innerHTML = '<div class="text-lg font-bold text-gray-400">初始密碼：123456</div>';
                             }
                         } catch (err) {
                             console.error(err);
@@ -2084,6 +2209,67 @@
             }
         };
 
+        // ===== 密碼顯示/隱藏切換 =====
+        window.togglePasswordVisibility = (inputId, btn) => {
+            const input = document.getElementById(inputId);
+            const isPassword = input.type === 'password';
+            input.type = isPassword ? 'text' : 'password';
+            
+            // 切換 SVG 圖示
+            if (isPassword) {
+                // 顯示密碼時，改為 "隱藏" (眼睛加斜線) 圖示
+                btn.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7 1.274-4.057-5.064-7-9.542-7 4.477 0 8.268 2.943 9.542 7z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3l18 18" />
+                    </svg>
+                `;
+            } else {
+                // 隱藏密碼時，改回 "顯示" (眼睛) 圖示
+                btn.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                `;
+            }
+        };
+
+        // ===== 自動登出邏輯 (登入後 1.2 小時固定登出) =====
+        let autoLogoutTimer;
+        const SESSION_DURATION = 1.2 * 60 * 60 * 1000; // 4,320,000 毫秒
+
+        function startSessionTimer() {
+            if (autoLogoutTimer) clearTimeout(autoLogoutTimer);
+            
+            let loginTime = localStorage.getItem('loginTime');
+            if (!loginTime) {
+                // 如果沒有登入時間但老師已在系統內，補上現在時間
+                loginTime = Date.now().toString();
+                localStorage.setItem('loginTime', loginTime);
+            }
+
+            const elapsed = Date.now() - parseInt(loginTime);
+            const remaining = SESSION_DURATION - elapsed;
+
+            if (remaining <= 0) {
+                alert("登入工作階段已達 1.2 小時，系統將自動登出。");
+                logout();
+            } else {
+                autoLogoutTimer = setTimeout(() => {
+                    alert("登入工作階段已達 1.2 小時，系統將自動登出。");
+                    logout();
+                }, remaining);
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('currentTeacher');
+            localStorage.removeItem('loginTime');
+            location.reload();
+        }
+
         const init = async () => {
             onAuthStateChanged(auth, async (u) => {
                 user = u;
@@ -2096,6 +2282,7 @@
                         document.getElementById('mainSection').classList.remove('hidden');
                         refreshClassDropdowns(saved);
                         await loadSavedSignature();
+                        startSessionTimer(); // 確認登入後開始計時
                     }
                 }
             });
@@ -2106,7 +2293,10 @@
 
             document.getElementById('btnLogin').onclick = async () => {
                 const name = document.getElementById('loginTeacherInput').value.trim();
+                const password = document.getElementById('loginPasswordInput').value.trim();
+                
                 if (!name) { showMessage("請輸入姓名", "error"); return; }
+                if (!password) { showMessage("請輸入密碼", "error"); return; }
                 
                 const cleanName = cleanStr(name);
                 const isTeacher = allTeachersData.some(t => cleanStr(t.teacherName || t.老師姓名 || t.老師 || '') === cleanName);
@@ -2117,19 +2307,191 @@
                     return;
                 }
 
-                localStorage.setItem('currentTeacher', name);
-                document.getElementById('displayTeacherName').innerText = name;
-                refreshClassDropdowns(name);
-                await loadSavedSignature();
-                document.getElementById('loginSection').classList.add('hidden');
-                document.getElementById('mainSection').classList.remove('hidden');
-                showMessage("登入成功");
-                refreshData(); 
+                // 驗證密碼
+                try {
+                    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'passwords', cleanName);
+                    const docSnap = await getDoc(docRef);
+                    let correctPassword = "123456"; // 預設密碼
+                    
+                    if (docSnap.exists()) {
+                        correctPassword = docSnap.data().password;
+                    }
+
+                    if (password !== correctPassword) {
+                        showMessage("密碼錯誤，請重新輸入", "error");
+                        return;
+                    }
+
+                    // 登入成功
+                    localStorage.setItem('currentTeacher', name);
+                    localStorage.setItem('loginTime', Date.now().toString()); // 設置登入時間點
+                    document.getElementById('displayTeacherName').innerText = name;
+                    refreshClassDropdowns(name);
+                    await loadSavedSignature();
+                    startSessionTimer(); // 開始登入計時
+                    
+                    // 檢查是否為初始密碼，若是則強制修改
+                    if (correctPassword === "123456") {
+                        openChangePasswordModal(true); // true 表示強制修改
+                    } else {
+                        document.getElementById('loginSection').classList.add('hidden');
+                        document.getElementById('mainSection').classList.remove('hidden');
+                        showMessage("登入成功");
+                        refreshData();
+                    }
+                } catch (err) {
+                    console.error("登入驗證失敗:", err);
+                    showMessage("系統驗證失敗，請洽管理員", "error");
+                }
             };
 
+            // 支援 Enter 鍵跳轉與登入
+            document.getElementById('loginTeacherInput').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const pwdInput = document.getElementById('loginPasswordInput');
+                    
+                    // 先模糊再聚焦，試圖強制觸發作業系統的輸入法上下文切換
+                    pwdInput.blur();
+                    setTimeout(() => {
+                        pwdInput.focus();
+                        // 如果有舊值則移到最後
+                        pwdInput.setSelectionRange(pwdInput.value.length, pwdInput.value.length);
+                    }, 10);
+                }
+            });
+
+            // 監聽密碼框的中文輸入偵測
+            ['loginPasswordInput', 'currentPasswordInput', 'newPasswordInput', 'confirmNewPasswordInput'].forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+
+                // 偵測開始中文組字 (Composition)
+                el.addEventListener('compositionstart', () => {
+                    const warning = document.getElementById(`imeWarning_${id}`);
+                    if (warning) warning.classList.remove('hidden');
+                });
+
+                // 組字結束
+                el.addEventListener('compositionend', () => {
+                    // 如果組字完畢後還是有非 ASCII 字元，則維持提醒
+                });
+
+                // 失去焦點時隱藏提醒
+                el.addEventListener('blur', () => {
+                    const warning = document.getElementById(`imeWarning_${id}`);
+                    if (warning) warning.classList.add('hidden');
+                });
+            });
+
+            document.getElementById('loginPasswordInput').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    document.getElementById('btnLogin').click();
+                }
+            });
+
+            // 修改密碼相關邏輯
+            const openChangePasswordModal = (isForce = false) => {
+                const modal = document.getElementById('changePasswordModal');
+                const hint = document.getElementById('forceChangeHint');
+                const cancelBtn = document.getElementById('btnCancelChangePassword');
+                
+                modal.classList.remove('hidden');
+                if (isForce) {
+                    hint.style.display = 'block';
+                    cancelBtn.style.display = 'none'; // 強制修改時不可取消
+                } else {
+                    hint.style.display = 'none';
+                    cancelBtn.style.display = 'block';
+                }
+                
+                // 清空輸入框
+                document.getElementById('currentPasswordInput').value = '';
+                document.getElementById('newPasswordInput').value = '';
+                document.getElementById('confirmNewPasswordInput').value = '';
+            };
+
+            document.getElementById('btnOpenChangePassword').onclick = () => openChangePasswordModal(false);
+            
+            document.getElementById('btnCancelChangePassword').onclick = () => {
+                document.getElementById('changePasswordModal').classList.add('hidden');
+            };
+
+            document.getElementById('btnConfirmChangePassword').onclick = async () => {
+                const currentTeacher = localStorage.getItem('currentTeacher');
+                const currentPwd = document.getElementById('currentPasswordInput').value.trim();
+                const newPwd = document.getElementById('newPasswordInput').value.trim();
+                const confirmPwd = document.getElementById('confirmNewPasswordInput').value.trim();
+                
+                if (!currentPwd || !newPwd || !confirmPwd) {
+                    showMessage("請填寫所有欄位", "error");
+                    return;
+                }
+
+                if (newPwd !== confirmPwd) {
+                    showMessage("新密碼與確認密碼不符", "error");
+                    return;
+                }
+
+                // 驗證新密碼強度：6位數，含大小寫英文及數字/符號
+                // 這裡使用正則表達式檢查
+                const pwdRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[\d!@#$%^&*()_+={}\[\]:;"'<>,.?\/\\|`~]).{6,}$/;
+                if (!pwdRegex.test(newPwd)) {
+                    showMessage("密碼格式不符：需至少6位並包含大小寫英文及數字或符號", "error");
+                    return;
+                }
+
+                try {
+                    const cleanName = cleanStr(currentTeacher);
+                    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'passwords', cleanName);
+                    const docSnap = await getDoc(docRef);
+                    let correctPassword = "123456";
+                    if (docSnap.exists()) {
+                        correctPassword = docSnap.data().password;
+                    }
+
+                    if (currentPwd !== correctPassword) {
+                        showMessage("目前密碼輸入錯誤", "error");
+                        return;
+                    }
+
+                    // 更新密碼到 Firebase
+                    await setDoc(docRef, {
+                        password: newPwd,
+                        updatedAt: serverTimestamp()
+                    });
+
+                    showMessage("密碼修改成功，請重新登入");
+                    setTimeout(() => logout(), 1500); // 修改成功後登出，要求重新登入
+                } catch (err) {
+                    console.error("修改密碼失敗:", err);
+                    showMessage("修改失敗，請稍後再試", "error");
+                }
+            };
+
+            // 支援 Enter 鍵跳轉確認修改密碼
+            document.getElementById('currentPasswordInput').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    document.getElementById('newPasswordInput').focus();
+                }
+            });
+            document.getElementById('newPasswordInput').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    document.getElementById('confirmNewPasswordInput').focus();
+                }
+            });
+            document.getElementById('confirmNewPasswordInput').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    document.getElementById('btnConfirmChangePassword').click();
+                }
+            });
+
             document.getElementById('btnLogout').onclick = () => { 
-                localStorage.removeItem('currentTeacher'); 
-                location.reload(); 
+                logout();
             };
 
             // 更新分頁切換邏輯，加入 Expense
