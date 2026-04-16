@@ -69,6 +69,14 @@
     </script>
     
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // 配置 Tailwind，雖然仍是 CDN 但能減少部分警告
+        tailwind.config = {
+            theme: {
+                extend: {}
+            }
+        };
+    </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         /* 基礎樣式設定 */
@@ -338,6 +346,19 @@
                 <div class="flex gap-4">
                     <button id="btnCancelAttendanceOverlap" class="flex-1 py-3 bg-gray-200 text-gray-700 rounded-xl font-bold hover:bg-gray-300 transition">取消</button>
                     <button id="btnConfirmAttendanceOverlap" class="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition">覆蓋</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 費用單重複確認 Modal -->
+        <div id="expenseOverlapModal" class="fixed inset-0 bg-black bg-opacity-50 z-[250] hidden flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center">
+                <div class="text-orange-500 text-5xl mb-4">⚠️</div>
+                <h3 class="text-2xl font-bold mb-2">同1個月份同1個班己經申請過</h3>
+                <p class="text-gray-600 mb-8">請問是否覆蓋？</p>
+                <div class="flex gap-4">
+                    <button id="btnCancelExpenseOverlap" class="flex-1 py-3 bg-gray-200 text-gray-700 rounded-xl font-bold hover:bg-gray-300 transition">取消</button>
+                    <button id="btnConfirmExpenseOverlap" class="flex-1 py-3 bg-orange-600 text-white rounded-xl font-bold hover:bg-orange-700 transition">覆蓋</button>
                 </div>
             </div>
         </div>
@@ -629,7 +650,20 @@
                 </div>
             </div>
 
-            <!-- 費用單預覽 Modal -->
+            <!-- 費用單重複確認 Modal -->
+        <div id="expenseDuplicateConfirmModal" class="fixed inset-0 bg-black bg-opacity-50 z-[250] hidden flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center">
+                <div class="text-6xl mb-4">⚠️</div>
+                <h3 class="text-2xl font-bold text-gray-800 mb-2">重複申請確認</h3>
+                <p id="expenseDuplicateConfirmMsg" class="text-gray-600 mb-8 text-lg">同1個月份同1個班己經申請過，請問是否覆蓋？</p>
+                <div class="flex gap-4">
+                    <button id="btnCancelOverwrite" class="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold text-lg hover:bg-gray-200 transition">取消</button>
+                    <button id="btnConfirmOverwrite" class="flex-1 py-3 bg-orange-600 text-white rounded-xl font-bold text-lg hover:bg-orange-700 shadow-lg transition">覆蓋</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 費用單預覽 Modal -->
             <div id="expensePreviewModal" class="preview-overlay hidden">
                 <div class="flex gap-4 mb-4 no-print">
                     <button id="btnCancelPreview" class="px-8 py-3 bg-gray-200 text-gray-700 rounded-xl font-bold text-lg hover:bg-gray-300">取消</button>
@@ -798,6 +832,8 @@
         let selectedDates = []; // 存儲日曆中選擇的日期
         let calendarCurrentMonth = new Date();
         let pendingAnnouncementFile = null; // 暫存待上傳的公告檔案
+        let isOverwriteMode = false; // 是否處於覆蓋模式
+        let duplicateDocId = null; // 重複資料的 ID
 
         const showMessage = (msg, type = "success") => {
             const box = document.getElementById('messageBox');
@@ -964,8 +1000,8 @@
                 
                 select.innerHTML = '<option value="">-- 查看歷史記錄 --</option>';
                 mySheets.forEach((s, idx) => {
-                    const dateStr = s.createdAt ? new Date(s.createdAt.seconds * 1000).toLocaleDateString('zh-TW') : '未知';
-                    select.add(new Option(`${dateStr} - ${s.className}`, s.id));
+                    // 顯示費用單的年份與月份，而不是建立日期
+                    select.add(new Option(`${s.year}/${s.month} - ${s.className}`, s.id));
                 });
 
                 document.getElementById('expenseHistorySelect').onchange = (e) => {
@@ -1105,6 +1141,17 @@
                 showMessage("此日期為非上班日", "error");
                 return;
             }
+
+            // 限制只能選擇同一個月份
+            if (selectedDates.length > 0) {
+                const firstDate = new Date(selectedDates[0].replace(/-/g, '/'));
+                const newDate = new Date(dateStr.replace(/-/g, '/'));
+                if (firstDate.getFullYear() !== newDate.getFullYear() || firstDate.getMonth() !== newDate.getMonth()) {
+                    showMessage("簽到單費用單不能跨月申請", "error");
+                    return;
+                }
+            }
+
             const idx = selectedDates.indexOf(dateStr);
             if (idx > -1) {
                 selectedDates.splice(idx, 1);
@@ -1237,16 +1284,60 @@
 
         // 生成預覽
         let currentPreviewData = null;
-        async function generateExpensePreview() {
+        async function generateExpensePreview(arg) {
+            // 修復關鍵 Bug: 當按鈕點擊觸發此函數時，arg 會是 Event 物件(為真)，導致 !skipCheck 判定為假。
+            // 只有當 arg 明確等於 true 時才跳過檢查。
+            const skipCheck = (arg === true);
+            
             const teacherName = localStorage.getItem('currentTeacher');
             const className = document.getElementById('expenseClassSelect').value;
-            const arrivalTime = document.getElementById('expenseArrivalTime').value;
-            const departureTime = document.getElementById('expenseDepartureTime').value;
             const canvas = document.getElementById('signatureCanvas');
             
             if (!className || selectedDates.length === 0) {
                 showMessage('請選擇班級與日期', 'error');
                 return;
+            }
+
+            // 整理資料
+            const dates = [...selectedDates].sort();
+            const firstDateStr = dates[0].replace(/-/g, '/');
+            const firstDate = new Date(firstDateStr);
+            const year = firstDate.getFullYear() - 1911; // 民國年
+            const month = firstDate.getMonth() + 1;
+
+            // 查重邏輯
+            if (!skipCheck) {
+                try {
+                    // 強制重新抓取資料庫，確保數據最新
+                    const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'expenseSheets'));
+                    allExpenseSheets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    
+                    const targetYear = Number(year);
+                    const targetMonth = Number(month);
+                    const targetTeacher = teacherName ? teacherName.toString().trim() : "";
+                    const targetClass = className ? className.toString().trim() : "";
+
+                    const duplicate = allExpenseSheets.find(s => {
+                        const dbTeacher = (s.teacherName || "").toString().trim();
+                        const dbClass = (s.className || "").toString().trim();
+                        const dbYear = Number(s.year);
+                        const dbMonth = Number(s.month);
+
+                        return dbTeacher === targetTeacher && 
+                               dbClass === targetClass && 
+                               dbYear === targetYear && 
+                               dbMonth === targetMonth;
+                    });
+
+                    if (duplicate) {
+                        isOverwriteMode = true;
+                        duplicateDocId = duplicate.id;
+                        document.getElementById('expenseDuplicateConfirmModal').classList.remove('hidden');
+                        return;
+                    }
+                } catch (err) {
+                    console.error("查重出錯:", err);
+                }
             }
 
             // 檢查簽名是否為空
@@ -1257,14 +1348,8 @@
 
             const signatureData = canvas.toDataURL();
 
-            // 整理資料
-            const dates = [...selectedDates].sort();
-            const year = new Date(dates[0]).getFullYear() - 1911; // 民國年
-            const month = new Date(dates[0]).getMonth() + 1;
-
             const items = dates.map(d => {
                 const dateObj = new Date(d.replace(/-/g, '/'));
-                const day = dateObj.getDay();
                 // 這裡根據班級與日期動態決定到勤時間
                 const dynamicArrival = getDefaultArrivalTime(className, d);
                 const dynamicDeparture = "18:20"; // 預設退勤為 18:20
@@ -1613,6 +1698,11 @@
             btn.innerText = '儲存中...';
             btn.disabled = true;
             try {
+                // 如果是覆蓋模式且有 duplicateDocId，則先刪除舊資料
+                if (isOverwriteMode && duplicateDocId) {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'expenseSheets', duplicateDocId));
+                }
+
                 const sheetData = {
                     teacherName: currentPreviewData.teacherName,
                     className: currentPreviewData.className,
@@ -1623,15 +1713,19 @@
                 };
 
                 if (currentPreviewData.id) {
-                    // 如果有 ID，表示是修改現有資料
+                    // 如果有 ID，表示是修改歷史記錄中的現有資料
                     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'expenseSheets', currentPreviewData.id), sheetData);
                     showMessage('簽到費用單已更新');
                 } else {
-                    // 否則新增
+                    // 否則新增 (可能是全新的或是覆蓋後的全新資料)
                     await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'expenseSheets'), sheetData);
-                    showMessage('簽到費用單已儲存');
+                    showMessage(isOverwriteMode ? '簽到費用單已覆蓋儲存' : '簽到費用單已儲存');
                 }
                 
+                // 重置覆蓋狀態
+                isOverwriteMode = false;
+                duplicateDocId = null;
+
                 document.getElementById('expensePreviewModal').classList.add('hidden');
                 
                 // 清除已選擇的日期，方便下次選擇
@@ -2236,47 +2330,65 @@
             }
         };
 
-        // ===== 自動登出邏輯 (登入後 1.2 小時固定登出) =====
+        // ===== 自動登出邏輯 (登入後 1.2 小時固定登出 - 強化行動裝置支援) =====
         let autoLogoutTimer;
         const SESSION_DURATION = 1.2 * 60 * 60 * 1000; // 4,320,000 毫秒
 
-        function startSessionTimer() {
-            if (autoLogoutTimer) clearTimeout(autoLogoutTimer);
+        // 核心檢查函式：不論是在前景、後台喚醒、或重新整理都會執行此檢查
+        function checkSessionStatus() {
+            const loginTime = localStorage.getItem('loginTime');
+            const teacher = localStorage.getItem('currentTeacher');
             
-            let loginTime = localStorage.getItem('loginTime');
+            if (!teacher) return false; // 未登入狀態不需檢查
+
+            // 如果有老師名字但沒記錄時間（舊程式殘留），立即補上現在時間
             if (!loginTime) {
-                // 向後相容：如果沒有登入時間（舊程式登入的老師），補上現在時間當作登入點
-                loginTime = Date.now().toString();
-                localStorage.setItem('loginTime', loginTime);
+                localStorage.setItem('loginTime', Date.now().toString());
+                return false;
             }
 
             const elapsed = Date.now() - parseInt(loginTime);
-            const remaining = SESSION_DURATION - elapsed;
-
-            if (remaining <= 0) {
-                // 已過期，直接執行登出
+            
+            if (elapsed >= SESSION_DURATION) {
+                // 已過期：清除快取並強制重新整理
+                console.log("Session expired, logging out...");
                 localStorage.removeItem('currentTeacher');
                 localStorage.removeItem('loginTime');
-                location.reload(); 
-                return true; // 代表已過期
-            } else {
-                autoLogoutTimer = setTimeout(() => {
-                    alert("登入工作階段已達 1.2 小時，系統將自動登出。");
-                    logout();
-                }, remaining);
-                return false; // 代表未過期
+                // 使用 location.replace 避免後退鍵回到過期頁面
+                location.replace(location.href);
+                return true; 
             }
+            
+            // 未過期：設置或更新定時器（僅作為前景持續使用時的輔助）
+            const remaining = SESSION_DURATION - elapsed;
+            if (autoLogoutTimer) clearTimeout(autoLogoutTimer);
+            autoLogoutTimer = setTimeout(() => {
+                alert("登入工作階段已達 1.2 小時，系統將自動登出。");
+                logout();
+            }, remaining);
+            
+            return false;
         }
 
         function logout() {
             localStorage.removeItem('currentTeacher');
             localStorage.removeItem('loginTime');
-            location.reload();
+            location.replace(location.href);
         }
 
+        // 行動裝置專用：監聽從後台切換回前景的瞬間
+        // 解決 iOS/Android 在背景時 setTimeout 會被掛起的問題
+        ['visibilitychange', 'pageshow', 'focus'].forEach(evt => {
+            window.addEventListener(evt, () => {
+                if (document.visibilityState === 'visible' || evt === 'pageshow' || evt === 'focus') {
+                    checkSessionStatus();
+                }
+            }, true);
+        });
+
         const init = async () => {
-            // 啟動時立即檢查一次是否過期
-            if (startSessionTimer()) return; 
+            // 啟動時第一時間檢查是否過期
+            if (checkSessionStatus()) return; 
 
             onAuthStateChanged(auth, async (u) => {
                 user = u;
@@ -2289,7 +2401,7 @@
                         document.getElementById('mainSection').classList.remove('hidden');
                         refreshClassDropdowns(saved);
                         await loadSavedSignature();
-                        startSessionTimer(); // 確認登入後開始計時
+                        checkSessionStatus(); // 確認登入後再次同步狀態
                     }
                 }
             });
@@ -2335,7 +2447,7 @@
                     document.getElementById('displayTeacherName').innerText = name;
                     refreshClassDropdowns(name);
                     await loadSavedSignature();
-                    startSessionTimer(); // 開始登入計時
+                    checkSessionStatus(); // 開始登入計時
                     
                     // 檢查是否為初始密碼，若是則強制修改
                     if (correctPassword === "123456") {
@@ -2581,8 +2693,30 @@
             document.getElementById('btnGenerateExpense').onclick = generateExpensePreview;
             document.getElementById('btnCancelPreview').onclick = () => {
                 document.getElementById('expensePreviewModal').classList.add('hidden');
+                // 取消預覽時重置覆蓋狀態
+                isOverwriteMode = false;
+                duplicateDocId = null;
             };
             document.getElementById('btnConfirmExpense').onclick = saveExpenseSheet;
+
+            // 重複申請確認 Modal 按鈕
+            document.getElementById('btnCancelOverwrite').onclick = () => {
+                document.getElementById('expenseDuplicateConfirmModal').classList.add('hidden');
+                // 取消則清空所有點的日期及選擇的班級，回到原點
+                selectedDates = [];
+                const dateText = document.getElementById('selectedDatesText');
+                if (dateText) dateText.innerText = '尚未選擇日期';
+                document.getElementById('expenseClassSelect').value = '';
+                isOverwriteMode = false;
+                duplicateDocId = null;
+                showMessage("已取消申請並清空資料");
+            };
+
+            document.getElementById('btnConfirmOverwrite').onclick = () => {
+                document.getElementById('expenseDuplicateConfirmModal').classList.add('hidden');
+                // 覆蓋則繼續生成預覽
+                generateExpensePreview(true); // skipCheck = true
+            };
 
             // 管理員歷史點名資料刪除功能
             document.getElementById('btnAdminQueryDelete').onclick = async () => {
