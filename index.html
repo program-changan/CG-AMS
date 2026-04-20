@@ -747,6 +747,34 @@
                     </div>
                 </div>
 
+
+
+                <!-- 系統狀態與維護 (管理員專用) -->
+                <div class="mt-12 border-t-2 border-gray-100 pt-8">
+                    <h4 class="text-xl font-bold mb-6 text-blue-700 flex items-center">
+                        <span class="mr-2">📊</span> 系統狀態與維護
+                    </h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-blue-50 p-6 rounded-2xl border border-blue-100">
+                            <h5 class="text-lg font-bold mb-4 text-blue-900">儲存空間查詢</h5>
+                            <p class="text-sm text-gray-600 mb-6">及時估算 Firebase 資料庫中各項數據的佔用量。</p>
+                            <button id="btnEstimateSize" class="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition shadow-md">
+                                📊 立即估算儲存空間
+                            </button>
+                            <div id="sizeStatus" class="text-xs text-center text-gray-500 mt-2"></div>
+                        </div>
+                        
+                        <div class="bg-amber-50 p-6 rounded-2xl border border-amber-100">
+                            <h5 class="text-lg font-bold mb-4 text-amber-900">非活躍教師清理</h5>
+                            <p class="text-sm text-gray-600 mb-6">偵測並刪除超過 1 年未登入的教師及其相關資料。</p>
+                            <button id="btnCleanupTeachers" class="w-full bg-amber-600 text-white py-3 rounded-xl font-bold hover:bg-amber-700 transition shadow-md">
+                                執行非活躍資料清理
+                            </button>
+                            <div id="cleanupStatus" class="text-xs text-center text-gray-500 mt-2"></div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 刪除歷史點名資料 (管理員專用) -->
                 <div class="mt-12 border-t-2 border-gray-100 pt-8">
                     <h4 class="text-xl font-bold mb-6 text-red-700 flex items-center">
@@ -804,7 +832,8 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, collection, query, getDocs, addDoc, serverTimestamp, deleteDoc, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, query, getDocs, addDoc, serverTimestamp, deleteDoc, where, orderBy, limit, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getStorage, ref, uploadString, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
         // Firebase Configuration (保持原樣)
         const firebaseConfig = {
@@ -819,8 +848,35 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
+        const storage = getStorage(app);
         
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'cn-ams-school';
+
+        // 將 Firebase 方法導出到 window 供傳統腳本使用
+        window.db = db;
+        window.auth = auth;
+        window.storage = storage;
+        window.collection = collection;
+        window.addDoc = addDoc;
+        window.getDocs = getDocs;
+        window.getDoc = getDoc;
+        window.query = query;
+        window.where = where;
+        window.orderBy = orderBy;
+        window.serverTimestamp = serverTimestamp;
+        window.doc = doc;
+        window.setDoc = setDoc;
+        window.deleteDoc = deleteDoc;
+        window.writeBatch = writeBatch;
+        window.limit = limit;
+        window.signInAnonymously = signInAnonymously;
+        window.onAuthStateChanged = onAuthStateChanged;
+        window.signInWithCustomToken = signInWithCustomToken;
+        window.ref = ref;
+        window.uploadString = uploadString;
+        window.uploadBytes = uploadBytes;
+        window.getDownloadURL = getDownloadURL;
+        window.deleteObject = deleteObject;
 
         let user = null;
         let allTeachersData = [];
@@ -830,10 +886,31 @@
         let allAnnouncements = [];
         let allExpenseSheets = []; // 存儲簽到費用單資料
         let selectedDates = []; // 存儲日曆中選擇的日期
+        let sigPaths = []; // 新增：存儲簽名路徑 (JSON 座標點)
+        let currentSigPath = []; // 新增：存儲當前筆畫
+        let sigDrawing = false;
+        let sigCtx = null;
         let calendarCurrentMonth = new Date();
         let pendingAnnouncementFile = null; // 暫存待上傳的公告檔案
         let isOverwriteMode = false; // 是否處於覆蓋模式
         let duplicateDocId = null; // 重複資料的 ID
+
+        window.addEventListener('error', (e) => {
+            console.error('Unhandled Error:', e.error);
+            if (e.message.includes('quota')) {
+                showMessage('資料庫存儲空間已滿 (1GB)，請通知管理員清理。', 'error');
+            } else {
+                // 如果是奇怪的錯誤，也至少給個提示
+                // showMessage('系統發生錯誤: ' + e.message, 'error');
+            }
+        });
+
+        window.addEventListener('unhandledrejection', (e) => {
+            console.error('Unhandled Promise Rejection:', e.reason);
+            if (e.reason && e.reason.message && e.reason.message.includes('quota')) {
+                showMessage('資料庫存儲空間已滿 (1GB)，請通知管理員清理。', 'error');
+            }
+        });
 
         const showMessage = (msg, type = "success") => {
             const box = document.getElementById('messageBox');
@@ -845,7 +922,10 @@
 
         const cleanStr = (str) => {
             if (!str) return "";
-            return str.toString().trim().replace(/[\s\u3000]/g, '').replace(/班$/, '');
+            return str.toString().trim()
+                .replace(/[\s\u3000]/g, '')
+                .replace(/(老師|班)$/, '') // 同時移除「老師」或「班」的結尾
+                .replace(/老師班$/, '');
         };
 
         // ===== 公告事項相關函式 =====
@@ -888,6 +968,8 @@
                 const isPdf = fileType === 'application/pdf';
                 const typeLabel = isImage ? '圖片' : (isPdf ? 'PDF' : '檔案');
                 const typeColor = isImage ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700';
+                const fileSrc = a.fileUrl || a.fileData; // 優化：優先使用 URL
+
                 return `
                     <div class="announcement-card bg-orange-50 p-5 rounded-xl border border-orange-100 shadow-sm mb-4" onclick="viewAnnouncement(${idx})">
                         <div class="flex justify-between items-start mb-2">
@@ -901,7 +983,7 @@
                             </div>
                             <span class="text-orange-400 text-2xl ml-3">📋</span>
                         </div>
-                        ${isImage ? `<div class="mt-3"><img src="${a.fileData}" class="max-h-48 rounded-lg border border-orange-200 object-contain" alt="${a.title}"></div>` : ''}
+                        ${isImage ? `<div class="mt-3"><img src="${fileSrc}" class="max-h-48 rounded-lg border border-orange-200 object-contain" alt="${a.title}"></div>` : ''}
                         <p class="text-sm text-orange-600 mt-2 font-bold">點擊查看完整內容 →</p>
                     </div>
                 `;
@@ -917,11 +999,13 @@
             }
             area.innerHTML = allAnnouncements.map((a, idx) => {
                 const dateStr = a.createdAt ? new Date(a.createdAt.seconds * 1000).toLocaleDateString('zh-TW') : '';
+                const hasStorage = !!a.storagePath;
                 return `
                     <div class="flex items-center justify-between bg-gray-50 p-2 rounded-lg border text-xs">
                         <div class="flex-1 truncate">
                             <span class="font-bold text-gray-700">${a.title || '未命名'}</span>
                             <span class="text-gray-400 ml-2">${dateStr}</span>
+                            ${hasStorage ? '<span class="text-[10px] bg-indigo-100 text-indigo-600 px-1 rounded ml-1">Cloud</span>' : ''}
                         </div>
                         <button onclick="deleteAnnouncement('${a.id}', event)" class="text-red-500 hover:text-red-700 font-bold ml-2 px-2 py-1 rounded hover:bg-red-50 transition">刪除</button>
                     </div>
@@ -938,12 +1022,13 @@
             const dateStr = a.createdAt ? new Date(a.createdAt.seconds * 1000).toLocaleDateString('zh-TW') + ' ' + new Date(a.createdAt.seconds * 1000).toLocaleTimeString('zh-TW') : '';
             const isImage = (a.fileType || '').startsWith('image/');
             const isPdf = (a.fileType || '') === 'application/pdf';
+            const fileSrc = a.fileUrl || a.fileData; // 優化：優先使用 URL
 
             let contentHtml = '';
             if (isImage) {
-                contentHtml = `<img src="${a.fileData}" class="announcement-file-preview mx-auto" alt="${a.title}">`;
+                contentHtml = `<img src="${fileSrc}" class="announcement-file-preview mx-auto" alt="${a.title}">`;
             } else if (isPdf) {
-                contentHtml = `<iframe src="${a.fileData}" class="w-full" style="height:75vh; border-radius:8px; border:1px solid #e5e7eb;"></iframe>`;
+                contentHtml = `<iframe src="${fileSrc}" class="w-full" style="height:75vh; border-radius:8px; border:1px solid #e5e7eb;"></iframe>`;
             } else {
                 contentHtml = `<p class="text-gray-500">無法預覽此檔案格式</p>`;
             }
@@ -972,11 +1057,27 @@
             if (event) event.stopPropagation();
             if (!confirm('確定要刪除此公告嗎？')) return;
             try {
-                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'announcements', docId));
+                // 先查找該公告以獲取 Storage 路徑
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'announcements', docId);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    // 如果有 Storage 路徑，則先從 Storage 刪除檔案
+                    if (data.storagePath) {
+                        try {
+                            const storageRef = ref(storage, data.storagePath);
+                            await deleteObject(storageRef);
+                        } catch (storageErr) {
+                            console.warn("從 Storage 刪除檔案失敗 (可能檔案已不存在):", storageErr);
+                        }
+                    }
+                }
+                
+                await deleteDoc(docRef);
                 showMessage('公告已刪除');
                 await loadAnnouncements();
             } catch (err) {
-                console.error(err);
+                console.error("刪除失敗:", err);
                 showMessage('刪除失敗', 'error');
             }
         };
@@ -1034,10 +1135,28 @@
             }
         }
 
-        window.viewExpenseSheet = (id) => {
+        window.viewExpenseSheet = async (id) => {
             const sheet = allExpenseSheets.find(s => s.id === id);
             if (!sheet) return;
-            renderExpensePreview(sheet.renderData, true); // true means view only
+            
+            // 強度優化：如果費用單內沒有簽名數據，則動態從教師庫抓取
+            const rd = sheet.renderData;
+            if (!rd.signature && (!rd.sigPaths || rd.sigPaths.length === 0)) {
+                try {
+                    const teacher = cleanStr(sheet.teacherName || rd.teacherName);
+                    const sigSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'signatures', teacher));
+                    if (sigSnap.exists()) {
+                        const sigData = sigSnap.data();
+                        if (sigData.paths) rd.sigPaths = sigData.paths;
+                        else if (sigData.signature) rd.signature = sigData.signature;
+                    }
+                } catch (err) {
+                    console.error("動態載入簽名失敗:", err);
+                }
+            }
+            
+            currentPreviewData = rd;
+            renderExpensePreview(rd, true); // true means view only
         };
 
         window.editExpenseSheet = (id) => {
@@ -1162,8 +1281,6 @@
         };
 
         // 簽名邏輯
-        let sigCtx, sigDrawing = false;
-
         async function loadSavedSignature() {
             const canvas = document.getElementById('signatureCanvas');
             if (!canvas) return;
@@ -1175,36 +1292,36 @@
             try {
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'signatures', teacher);
                 const docSnap = await getDoc(docRef);
-                let saved = null;
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                sigPaths = [];
+
                 if (docSnap.exists()) {
-                    saved = docSnap.data().signature;
+                    const data = docSnap.data();
+                    if (data.paths) {
+                        // 新格式：座標路徑 (JSON)
+                        sigPaths = data.paths;
+                        drawPaths(ctx, sigPaths);
+                    } else if (data.signature) {
+                        // 舊格式：Base64 (相容處理)
+                        const img = new Image();
+                        img.onload = () => {
+                            ctx.drawImage(img, 0, 0);
+                        };
+                        img.src = data.signature;
+                    }
                 } else {
                     // 退而求其次從本地載入舊資料（遷移用）
-                    saved = localStorage.getItem(`sig_${teacher}`);
-                }
-
-                if (saved) {
-                    const img = new Image();
-                    img.onload = () => {
-                        ctx.clearRect(0, 0, canvas.width, canvas.height);
-                        ctx.drawImage(img, 0, 0);
-                    };
-                    img.src = saved;
-                } else {
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    const saved = localStorage.getItem(`sig_${teacher}`);
+                    if (saved) {
+                        const img = new Image();
+                        img.onload = () => {
+                            ctx.drawImage(img, 0, 0);
+                        };
+                        img.src = saved;
+                    }
                 }
             } catch (err) {
                 console.error("載入簽名失敗:", err);
-                // 發生錯誤時嘗試本地
-                const localSaved = localStorage.getItem(`sig_${teacher}`);
-                if (localSaved) {
-                    const img = new Image();
-                    img.onload = () => {
-                        ctx.clearRect(0, 0, canvas.width, canvas.height);
-                        ctx.drawImage(img, 0, 0);
-                    };
-                    img.src = localSaved;
-                }
             }
         }
 
@@ -1228,22 +1345,62 @@
                 const rect = canvas.getBoundingClientRect();
                 const clientX = e.touches ? e.touches[0].clientX : e.clientX;
                 const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-                return { x: clientX - rect.left, y: clientY - rect.top };
+                // 座標標準化 (相對於寬高，確保在不同解析度下顯示一致)
+                return { 
+                    x: Math.round(((clientX - rect.left) / rect.width) * canvas.width), 
+                    y: Math.round(((clientY - rect.top) / rect.height) * canvas.height) 
+                };
             };
 
-            const start = (e) => { sigDrawing = true; sigCtx.beginPath(); const pos = getPos(e); sigCtx.moveTo(pos.x, pos.y); e.preventDefault(); };
-            const move = (e) => { if (!sigDrawing) return; const pos = getPos(e); sigCtx.lineTo(pos.x, pos.y); sigCtx.stroke(); e.preventDefault(); };
-            const end = () => { sigDrawing = false; };
+            const start = (e) => { 
+                sigDrawing = true; 
+                sigCtx.beginPath(); 
+                const pos = getPos(e); 
+                sigCtx.moveTo(pos.x, pos.y); 
+                currentSigPath = [pos];
+                e.preventDefault(); 
+            };
+            const move = (e) => { 
+                if (!sigDrawing) return; 
+                const pos = getPos(e); 
+                sigCtx.lineTo(pos.x, pos.y); 
+                sigCtx.stroke(); 
+                currentSigPath.push(pos);
+                e.preventDefault(); 
+            };
+            const end = () => { 
+                if (sigDrawing) {
+                    sigPaths.push(currentSigPath);
+                }
+                sigDrawing = false; 
+            };
 
             canvas.addEventListener('mousedown', start);
             canvas.addEventListener('mousemove', move);
             window.addEventListener('mouseup', end);
-            canvas.addEventListener('touchstart', start);
-            canvas.addEventListener('touchmove', move);
+            canvas.addEventListener('touchstart', start, { passive: false });
+            canvas.addEventListener('touchmove', move, { passive: false });
             canvas.addEventListener('touchend', end);
 
             // 載入快取的簽名
             await loadSavedSignature();
+        }
+
+        // 渲染座標路徑到指定的 Context
+        function drawPaths(ctx, paths, color = '#000', width = 3) {
+            if (!paths || paths.length === 0) return;
+            ctx.lineWidth = width;
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = color;
+            paths.forEach(path => {
+                if (path.length < 1) return;
+                ctx.beginPath();
+                ctx.moveTo(path[0].x, path[0].y);
+                for (let i = 1; i < path.length; i++) {
+                    ctx.lineTo(path[i].x, path[i].y);
+                }
+                ctx.stroke();
+            });
         }
 
         // 根據班級與日期判斷預設到勤時間
@@ -1368,7 +1525,8 @@
                 year,
                 month,
                 items,
-                signature: signatureData
+                signature: signatureData,
+                sigPaths: sigPaths // 儲存座標點
             };
 
             renderExpensePreview(currentPreviewData);
@@ -1431,6 +1589,16 @@
         function renderExpensePreview(data, viewOnly = false) {
             const modal = document.getElementById('expensePreviewModal');
             
+            // 優化：如果沒有 Base64 但有座標路徑，則先在隱藏 canvas 上繪製並生成 Base64 (僅供顯示)
+            if (!data.signature && data.sigPaths) {
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = 200;
+                tempCanvas.height = 300;
+                const tempCtx = tempCanvas.getContext('2d');
+                drawPaths(tempCtx, data.sigPaths);
+                data.signature = tempCanvas.toDataURL();
+            }
+            
             // 整理資料，如果跨時段則拆分成兩項填寫
             const expandedItems = [];
             data.items.forEach(item => {
@@ -1476,7 +1644,12 @@
                         </tr>
                         <tr>
                             <th class="w-16 font-bold py-1 text-[12px]">到勤簽到</th>
-                            ${cols.map(c => `<td style="height: 80px; vertical-align: middle;">${c ? `<img src="${data.signature}" class="max-h-full max-w-full mx-auto object-contain">` : ''}</td>`).join('')}
+                            ${cols.map(c => {
+                                if (!c) return '<td style="height: 80px;"></td>';
+                                // 如果有座標路徑，則動態生成 SVG 或在畫面上渲染 (這裡先用隱藏 canvas 轉小型 Base64 或直接渲染)
+                                // 為了簡單起見，我們在預覽時仍可以使用 Base64，但在儲存時只存座標
+                                return `<td style="height: 80px; vertical-align: middle;"><img src="${data.signature}" class="max-h-full max-w-full mx-auto object-contain"></td>`;
+                            }).join('')}
                         </tr>
                         <tr>
                             <th class="w-16 font-bold py-1 text-[12px]">退勤時間</th>
@@ -1484,7 +1657,10 @@
                         </tr>
                         <tr>
                             <th class="w-16 font-bold py-1 text-[12px]">退勤簽到</th>
-                            ${cols.map(c => `<td style="height: 80px; vertical-align: middle;">${c ? `<img src="${data.signature}" class="max-h-full max-w-full mx-auto object-contain">` : ''}</td>`).join('')}
+                            ${cols.map(c => {
+                                if (!c) return '<td style="height: 80px;"></td>';
+                                return `<td style="height: 80px; vertical-align: middle;"><img src="${data.signature}" class="max-h-full max-w-full mx-auto object-contain"></td>`;
+                            }).join('')}
                         </tr>
                     </table>
                 `;
@@ -1703,12 +1879,18 @@
                     await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'expenseSheets', duplicateDocId));
                 }
 
+                // 優化：如果有的話，使用座標點取代 Base64 以節省空間
+                const optimizedRenderData = { ...currentPreviewData };
+                if (optimizedRenderData.sigPaths && optimizedRenderData.sigPaths.length > 0) {
+                    delete optimizedRenderData.signature; // 刪除大型 Base64
+                }
+
                 const sheetData = {
                     teacherName: currentPreviewData.teacherName,
                     className: currentPreviewData.className,
                     year: currentPreviewData.year,
                     month: currentPreviewData.month,
-                    renderData: currentPreviewData,
+                    renderData: optimizedRenderData,
                     createdAt: serverTimestamp()
                 };
 
@@ -1748,6 +1930,7 @@
         async function refreshData() {
             if (!auth.currentUser) return;
             try {
+                // 檢查 Firestore 是否連線正常
                 const tSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'teachers'));
                 allTeachersData = tSnap.docs.map(doc => doc.data());
                 
@@ -1764,7 +1947,7 @@
                 // 同時載入公告
                 await loadAnnouncements();
 
-                // 初始化管理員刪除功能的下拉選單
+                // 初始化管理員選單
                 const adminDeleteClassSelect = document.getElementById('adminDeleteClassSelect');
                 const adminDeleteTeacherSelect = document.getElementById('adminDeleteTeacherSelect');
                 const adminViewTeacherSigSelect = document.getElementById('adminViewTeacherSigSelect');
@@ -1799,7 +1982,31 @@
                             const docSnap = await getDoc(docRef);
                             if (docSnap.exists()) {
                                 const data = docSnap.data();
-                                displayArea.innerHTML = `<img src="${data.signature}" class="max-h-40 object-contain shadow-inner rounded border">`;
+                                const isJSON = !!(data.paths && data.paths.length > 0);
+                                const formatLabel = isJSON ? 
+                                    '<span class="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-bold mb-2 inline-block">JSON 格式</span>' : 
+                                    '<span class="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-xs font-bold mb-2 inline-block">Base64 圖片</span>';
+                                
+                                let imgSrc = "";
+                                if (isJSON) {
+                                    const canvas = document.createElement('canvas');
+                                    canvas.width = 200; canvas.height = 300;
+                                    const ctx = canvas.getContext('2d');
+                                    drawPaths(ctx, data.paths);
+                                    imgSrc = canvas.toDataURL();
+                                } else {
+                                    imgSrc = data.signature;
+                                }
+
+                                displayArea.innerHTML = `
+                                    <div class="flex flex-col items-center w-full">
+                                        ${formatLabel}
+                                        <img src="${imgSrc}" class="max-h-40 object-contain shadow-inner rounded border mb-4">
+                                        <button onclick="deleteTeacherSignature('${teacher}')" class="bg-red-50 text-red-600 px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-100 border border-red-100 transition w-full">
+                                            🗑️ 刪除簽名並要求重簽
+                                        </button>
+                                    </div>
+                                `;
                             } else {
                                 displayArea.innerHTML = '<p class="text-red-400 text-sm">該老師尚未在系統存儲簽名</p>';
                             }
@@ -1809,6 +2016,19 @@
                         }
                     };
                 }
+
+                window.deleteTeacherSignature = async (teacherName) => {
+                    if (!confirm(`確定要刪除「${teacherName}」老師的簽名嗎？\n刪除後老師登入時將會要求重新簽名。`)) return;
+                    try {
+                        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'signatures', teacherName));
+                        showMessage(`「${teacherName}」老師的簽名已刪除`);
+                        // 重新載入顯示區域
+                        document.getElementById('adminViewTeacherSigSelect').dispatchEvent(new Event('change'));
+                    } catch (err) {
+                        console.error("刪除簽名失敗:", err);
+                        showMessage("刪除簽名失敗", "error");
+                    }
+                };
 
                 if (adminViewTeacherPwdSelect) {
                     adminViewTeacherPwdSelect.innerHTML = '<option value="">-- 請選擇老師 --</option>';
@@ -1829,7 +2049,7 @@
                                 const data = docSnap.data();
                                 displayArea.innerHTML = `<div class="text-2xl font-black text-purple-700 tracking-widest bg-white px-6 py-2 rounded-lg border-2 border-purple-200 shadow-inner">${data.password}</div>`;
                             } else {
-                                displayArea.innerHTML = '<div class="text-lg font-bold text-gray-400">初始密碼：123456</div>';
+                                displayArea.innerHTML = '<div class="text-lg font-bold text-gray-700">初始密碼：123456</div>';
                             }
                         } catch (err) {
                             console.error(err);
@@ -1838,7 +2058,12 @@
                     };
                 }
             } catch (error) { 
-                console.error("同步失敗:", error); 
+                console.error("同步失敗:", error);
+                if (error.message.includes("quota")) {
+                    showMessage("資料庫空間已達上限 (1GB)，請聯絡管理員清理儲存空間", "error");
+                } else {
+                    showMessage("資料載入失敗，請確認網路連線", "error");
+                }
             }
         }
 
@@ -2257,19 +2482,29 @@
                 return;
             }
             const btn = document.getElementById('btnConfirmAnnouncement');
+            const originalText = btn.innerText;
             btn.innerText = '上傳中...';
             btn.disabled = true;
             try {
-                const base64Data = await fileToBase64(pendingAnnouncementFile);
+                // 上傳到 Firebase Storage 以節省 Firestore 空間
+                const timestamp = Date.now();
+                const safeFileName = pendingAnnouncementFile.name.replace(/[^a-zA-Z0-9.]/g, '_');
+                const storagePath = `announcements/${timestamp}_${safeFileName}`;
+                const storageRef = ref(storage, storagePath);
+                
+                const snapshot = await uploadBytes(storageRef, pendingAnnouncementFile);
+                const downloadURL = await getDownloadURL(snapshot.ref);
+
                 await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'announcements'), {
                     title: title,
                     fileName: pendingAnnouncementFile.name,
                     fileType: pendingAnnouncementFile.type,
-                    fileData: base64Data,
+                    fileUrl: downloadURL, // 改存 URL
+                    storagePath: storagePath, // 存路徑方便以後刪除
                     createdAt: serverTimestamp(),
                     uploadedBy: localStorage.getItem('currentTeacher') || '管理員'
                 });
-                showMessage('公告上傳成功');
+                showMessage('公告上傳成功 (已存儲至雲端磁碟)');
                 pendingAnnouncementFile = null;
                 document.getElementById('announcementFile').value = '';
                 document.getElementById('announcementUploadInfo').innerHTML = '';
@@ -2278,9 +2513,9 @@
                 await loadAnnouncements();
             } catch (err) {
                 console.error(err);
-                showMessage('上傳失敗，請確認檔案大小或網路連線', 'error');
+                showMessage('上傳失敗，請確認網路連線或儲存空間', 'error');
             } finally {
-                btn.innerText = '確認上傳公告';
+                btn.innerText = originalText;
                 btn.disabled = false;
             }
         };
@@ -2411,23 +2646,38 @@
             });
 
             document.getElementById('btnLogin').onclick = async () => {
-                const name = document.getElementById('loginTeacherInput').value.trim();
-                const password = document.getElementById('loginPasswordInput').value.trim();
+                const nameInput = document.getElementById('loginTeacherInput');
+                const passwordInput = document.getElementById('loginPasswordInput');
+                const name = nameInput.value.trim();
+                const password = passwordInput.value.trim();
                 
                 if (!name) { showMessage("請輸入姓名", "error"); return; }
                 if (!password) { showMessage("請輸入密碼", "error"); return; }
                 
-                const cleanName = cleanStr(name);
-                const isTeacher = allTeachersData.some(t => cleanStr(t.teacherName || t.老師姓名 || t.老師 || '') === cleanName);
-                const isAdmin = cleanName === "管理員";
+                const btn = document.getElementById('btnLogin');
+                const originalText = btn.innerText;
+                btn.disabled = true;
+                btn.innerText = '登入驗證中...';
 
-                if (!isTeacher && !isAdmin) {
-                    showMessage("對不起！系統沒有辨識到您的名字<br>或 請您洽詢 輔導室 #282", "error");
-                    return;
-                }
-
-                // 驗證密碼
                 try {
+                    const cleanName = cleanStr(name);
+                    const isAdmin = cleanName === "管理員";
+
+                    // 如果 allTeachersData 還沒載入完畢，先嘗試載入
+                    if (allTeachersData.length === 0) {
+                        await refreshData();
+                    }
+
+                    const isTeacher = allTeachersData.some(t => cleanStr(t.teacherName || t.老師姓名 || t.老師 || '') === cleanName);
+
+                    if (!isTeacher && !isAdmin) {
+                        showMessage("對不起！系統沒有辨識到您的名字<br>或 請您洽詢 輔導室 #282", "error");
+                        btn.disabled = false;
+                        btn.innerText = originalText;
+                        return;
+                    }
+
+                    // 驗證密碼
                     const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'passwords', cleanName);
                     const docSnap = await getDoc(docRef);
                     let correctPassword = "123456"; // 預設密碼
@@ -2438,6 +2688,8 @@
 
                     if (password !== correctPassword) {
                         showMessage("密碼錯誤，請重新輸入", "error");
+                        btn.disabled = false;
+                        btn.innerText = originalText;
                         return;
                     }
 
@@ -2460,7 +2712,14 @@
                     }
                 } catch (err) {
                     console.error("登入驗證失敗:", err);
-                    showMessage("系統驗證失敗，請洽管理員", "error");
+                    if (err.message.includes("quota")) {
+                        showMessage("資料庫空間已達上限，登入驗證失敗", "error");
+                    } else {
+                        showMessage("系統驗證失敗，請檢查網路連線", "error");
+                    }
+                } finally {
+                    btn.disabled = false;
+                    btn.innerText = originalText;
                 }
             };
 
@@ -2666,23 +2925,30 @@
                 const canvas = document.getElementById('signatureCanvas');
                 const ctx = canvas.getContext('2d');
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
+                sigPaths = []; // 清空路徑
             };
             document.getElementById('btnConfirmSignature').onclick = async () => {
                 const canvas = document.getElementById('signatureCanvas');
-                const data = canvas.toDataURL();
+                if (isCanvasEmpty(canvas)) {
+                    showMessage('請先簽名', 'error');
+                    return;
+                }
+                const data = canvas.toDataURL(); // 仍然保留 Base64 用於本地快取 (小型)
                 const teacher = localStorage.getItem('currentTeacher');
                 if (!teacher) return;
                 
                 try {
-                    // 同步到 Firebase 以實現跨裝置
+                    // 同步到 Firebase 以實現跨裝置，這裡改存座標路徑
                     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'signatures', teacher), {
-                        signature: data,
+                        // 這裡可以選擇是否保留 signature 欄位，或者只存 paths
+                        // 為了徹底省空間，我們只存 paths，如果沒有 paths (舊數據遷移後) 才存 signature
+                        paths: sigPaths, 
                         updatedAt: serverTimestamp()
                     });
                     
                     // 傳統本地存儲保留一份作為快取
                     localStorage.setItem(`sig_${teacher}`, data);
-                    showMessage('簽名已跨裝置同步存儲');
+                    showMessage('簽名已跨裝置優化存儲');
                 } catch (err) {
                     console.error("儲存簽名失敗:", err);
                     localStorage.setItem(`sig_${teacher}`, data);
@@ -2718,7 +2984,10 @@
                 generateExpensePreview(true); // skipCheck = true
             };
 
+            // 數據遷移與清理功能
             // 管理員歷史點名資料刪除功能
+            document.getElementById('btnEstimateSize').onclick = estimateStorageSize;
+            document.getElementById('btnCleanupTeachers').onclick = cleanupInactiveTeachers;
             document.getElementById('btnAdminQueryDelete').onclick = async () => {
                 const cls = document.getElementById('adminDeleteClassSelect').value;
                 const teacher = document.getElementById('adminDeleteTeacherSelect').value;
@@ -2816,6 +3085,103 @@
             document.getElementById('expenseHistorySelect').onchange = (e) => {
                 if (e.target.value) viewExpenseSheet(e.target.value);
             };
+
+            async function estimateStorageSize() {
+                const status = document.getElementById('sizeStatus');
+                const btn = document.getElementById('btnEstimateSize');
+                const originalText = btn.innerText;
+                btn.disabled = true;
+                btn.innerText = '估算中...';
+                
+                try {
+                    let totalBytes = 0;
+                    let collections = [
+                        { name: 'signatures', label: '教師簽名庫' },
+                        { name: 'expenseSheets', label: '簽到費用單' },
+                        { name: 'attendance', label: '點名紀錄' },
+                        { name: 'announcements', label: '公告資料' }
+                    ];
+
+                    let report = "【資料佔用空間估算】\n";
+
+                    for (const col of collections) {
+                        status.innerText = `正在估算 ${col.label}...`;
+                        const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', col.name));
+                        let colBytes = 0;
+                        snap.docs.forEach(d => {
+                            colBytes += JSON.stringify(d.data()).length * 2; 
+                        });
+                        totalBytes += colBytes;
+                        report += `- ${col.label}: ${(colBytes / 1024 / 1024).toFixed(2)} MB\n`;
+                    }
+
+                    const totalMB = (totalBytes / 1024 / 1024).toFixed(2);
+                    const totalGB = (totalBytes / 1024 / 1024 / 1024).toFixed(4);
+                    
+                    report += `\n總計估算：${totalMB} MB (${totalGB} GB)`;
+                    alert(report);
+                    status.innerText = `上次估算：${totalMB} MB`;
+                } catch (err) {
+                    console.error("估算失敗:", err);
+                    status.innerText = '估算出錯';
+                } finally {
+                    btn.disabled = false;
+                    btn.innerText = originalText;
+                }
+            }
+
+            async function cleanupInactiveTeachers() {
+                if (!confirm('確定要執行清理嗎？這將永久刪除超過 1 年未使用的教師資料（簽名、費用單等）。')) return;
+                const status = document.getElementById('cleanupStatus');
+                const btn = document.getElementById('btnCleanupTeachers');
+                const originalText = btn.innerText;
+                btn.disabled = true;
+                btn.innerText = '清理中...';
+                try {
+                    status.innerText = '正在掃描非活躍教師...';
+                    const oneYearAgo = new Date();
+                    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+                    
+                    const signaturesSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'signatures'));
+                    let deletedCount = 0;
+                    
+                    for (const sigDoc of signaturesSnap.docs) {
+                        const teacherName = sigDoc.id;
+                        if (teacherName === "管理員") continue;
+
+                        const data = sigDoc.data();
+                        const lastActive = data.updatedAt?.toDate() || new Date(0); 
+
+                        if (lastActive < oneYearAgo) {
+                            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'signatures', teacherName));
+                            
+                            const expenseQuery = query(
+                                collection(db, 'artifacts', appId, 'public', 'data', 'expenseSheets'),
+                                where('teacherName', '==', teacherName)
+                            );
+                            const expenseSnap = await getDocs(expenseQuery);
+                            for (const expDoc of expenseSnap.docs) {
+                                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'expenseSheets', expDoc.id));
+                            }
+                            
+                            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'passwords', cleanStr(teacherName)));
+                            
+                            deletedCount++;
+                            status.innerText = `已清理 ${deletedCount} 位教師資料...`;
+                        }
+                    }
+                    
+                    showMessage(`清理完成！共移除 ${deletedCount} 位非活躍教師的相關資料`);
+                    status.innerText = '清理完成';
+                } catch (err) {
+                    console.error("清理失敗:", err);
+                    showMessage('清理過程中發生錯誤', 'error');
+                    status.innerText = '清理出錯';
+                } finally {
+                    btn.disabled = false;
+                    btn.innerText = originalText;
+                }
+            }
 
             await initSignature();
         };
