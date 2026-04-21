@@ -69,6 +69,14 @@
     </script>
     
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // 配置 Tailwind，雖然仍是 CDN 但能減少部分警告
+        tailwind.config = {
+            theme: {
+                extend: {}
+            }
+        };
+    </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         /* 基礎樣式設定 */
@@ -342,6 +350,19 @@
             </div>
         </div>
 
+        <!-- 費用單重複確認 Modal -->
+        <div id="expenseOverlapModal" class="fixed inset-0 bg-black bg-opacity-50 z-[250] hidden flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center">
+                <div class="text-orange-500 text-5xl mb-4">⚠️</div>
+                <h3 class="text-2xl font-bold mb-2">同1個月份同1個班己經申請過</h3>
+                <p class="text-gray-600 mb-8">請問是否覆蓋？</p>
+                <div class="flex gap-4">
+                    <button id="btnCancelExpenseOverlap" class="flex-1 py-3 bg-gray-200 text-gray-700 rounded-xl font-bold hover:bg-gray-300 transition">取消</button>
+                    <button id="btnConfirmExpenseOverlap" class="flex-1 py-3 bg-orange-600 text-white rounded-xl font-bold hover:bg-orange-700 transition">覆蓋</button>
+                </div>
+            </div>
+        </div>
+
         <!-- 登入介面 -->
         <div id="loginSection" class="flex items-center justify-center min-h-screen">
             <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md login-card">
@@ -592,6 +613,23 @@
                     </div>
                 </div>
 
+                <!-- 舊簽名格式升級提示橫幅 (預設隱藏，偵測到 Base64 舊格式時顯示) -->
+                <div id="sigUpgradeNotice" class="hidden mb-6 w-full">
+                    <div class="bg-amber-50 border-2 border-amber-400 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                        <div class="text-4xl">✍️</div>
+                        <div class="flex-1">
+                            <p class="text-amber-800 font-black text-lg mb-1">需要重新簽名（一次性升級）</p>
+                            <p class="text-amber-700 text-sm leading-relaxed">
+                                系統偵測到您的簽名仍為舊格式，需升級為新格式才能正常儲存到系統。<br>
+                                請按下方「<strong>清除</strong>」後重新簽名，再按「<strong>確認簽名</strong>」上傳，完成後即可繼續使用，<strong>只需操作一次</strong>。
+                            </p>
+                        </div>
+                        <div class="shrink-0">
+                            <span class="inline-block bg-amber-200 text-amber-900 text-xs font-bold px-3 py-1 rounded-full">⚠️ 請先完成升級</span>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 4. 簽名區域 (直式) -->
                 <div class="mb-8 flex flex-col items-center">
                     <label class="block text-sm font-bold text-gray-700 mb-2 self-start">教師簽名 (請於下方區域簽名)</label>
@@ -629,7 +667,20 @@
                 </div>
             </div>
 
-            <!-- 費用單預覽 Modal -->
+            <!-- 費用單重複確認 Modal -->
+        <div id="expenseDuplicateConfirmModal" class="fixed inset-0 bg-black bg-opacity-50 z-[250] hidden flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center">
+                <div class="text-6xl mb-4">⚠️</div>
+                <h3 class="text-2xl font-bold text-gray-800 mb-2">重複申請確認</h3>
+                <p id="expenseDuplicateConfirmMsg" class="text-gray-600 mb-8 text-lg">同1個月份同1個班己經申請過，請問是否覆蓋？</p>
+                <div class="flex gap-4">
+                    <button id="btnCancelOverwrite" class="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold text-lg hover:bg-gray-200 transition">取消</button>
+                    <button id="btnConfirmOverwrite" class="flex-1 py-3 bg-orange-600 text-white rounded-xl font-bold text-lg hover:bg-orange-700 shadow-lg transition">覆蓋</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 費用單預覽 Modal -->
             <div id="expensePreviewModal" class="preview-overlay hidden">
                 <div class="flex gap-4 mb-4 no-print">
                     <button id="btnCancelPreview" class="px-8 py-3 bg-gray-200 text-gray-700 rounded-xl font-bold text-lg hover:bg-gray-300">取消</button>
@@ -713,6 +764,34 @@
                     </div>
                 </div>
 
+
+
+                <!-- 系統狀態與維護 (管理員專用) -->
+                <div class="mt-12 border-t-2 border-gray-100 pt-8">
+                    <h4 class="text-xl font-bold mb-6 text-blue-700 flex items-center">
+                        <span class="mr-2">📊</span> 系統狀態與維護
+                    </h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-blue-50 p-6 rounded-2xl border border-blue-100">
+                            <h5 class="text-lg font-bold mb-4 text-blue-900">儲存空間查詢</h5>
+                            <p class="text-sm text-gray-600 mb-6">及時估算 Firebase 資料庫中各項數據的佔用量。</p>
+                            <button id="btnEstimateSize" class="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition shadow-md">
+                                📊 立即估算儲存空間
+                            </button>
+                            <div id="sizeStatus" class="text-xs text-center text-gray-500 mt-2"></div>
+                        </div>
+                        
+                        <div class="bg-amber-50 p-6 rounded-2xl border border-amber-100">
+                            <h5 class="text-lg font-bold mb-4 text-amber-900">非活躍教師清理</h5>
+                            <p class="text-sm text-gray-600 mb-6">偵測並刪除超過 1 年未登入的教師及其相關資料。</p>
+                            <button id="btnCleanupTeachers" class="w-full bg-amber-600 text-white py-3 rounded-xl font-bold hover:bg-amber-700 transition shadow-md">
+                                執行非活躍資料清理
+                            </button>
+                            <div id="cleanupStatus" class="text-xs text-center text-gray-500 mt-2"></div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 刪除歷史點名資料 (管理員專用) -->
                 <div class="mt-12 border-t-2 border-gray-100 pt-8">
                     <h4 class="text-xl font-bold mb-6 text-red-700 flex items-center">
@@ -770,7 +849,8 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, collection, query, getDocs, addDoc, serverTimestamp, deleteDoc, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, query, getDocs, addDoc, serverTimestamp, deleteDoc, where, orderBy, limit, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getStorage, ref, uploadString, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
         // Firebase Configuration (保持原樣)
         const firebaseConfig = {
@@ -785,8 +865,35 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
+        const storage = getStorage(app);
         
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'cn-ams-school';
+
+        // 將 Firebase 方法導出到 window 供傳統腳本使用
+        window.db = db;
+        window.auth = auth;
+        window.storage = storage;
+        window.collection = collection;
+        window.addDoc = addDoc;
+        window.getDocs = getDocs;
+        window.getDoc = getDoc;
+        window.query = query;
+        window.where = where;
+        window.orderBy = orderBy;
+        window.serverTimestamp = serverTimestamp;
+        window.doc = doc;
+        window.setDoc = setDoc;
+        window.deleteDoc = deleteDoc;
+        window.writeBatch = writeBatch;
+        window.limit = limit;
+        window.signInAnonymously = signInAnonymously;
+        window.onAuthStateChanged = onAuthStateChanged;
+        window.signInWithCustomToken = signInWithCustomToken;
+        window.ref = ref;
+        window.uploadString = uploadString;
+        window.uploadBytes = uploadBytes;
+        window.getDownloadURL = getDownloadURL;
+        window.deleteObject = deleteObject;
 
         let user = null;
         let allTeachersData = [];
@@ -796,20 +903,47 @@
         let allAnnouncements = [];
         let allExpenseSheets = []; // 存儲簽到費用單資料
         let selectedDates = []; // 存儲日曆中選擇的日期
+        let sigPaths = []; // 新增：存儲簽名路徑 (JSON 座標點)
+        let currentSigPath = []; // 新增：存儲當前筆畫
+        let sigDrawing = false;
+        let sigCtx = null;
         let calendarCurrentMonth = new Date();
         let pendingAnnouncementFile = null; // 暫存待上傳的公告檔案
+        let isOverwriteMode = false; // 是否處於覆蓋模式
+        let duplicateDocId = null; // 重複資料的 ID
+
+        window.addEventListener('error', (e) => {
+            console.error('Unhandled Error:', e.error);
+            if (e.message.includes('quota')) {
+                showMessage('資料庫存儲空間已滿 (1GB)，請通知管理員清理。', 'error');
+            } else {
+                // 如果是奇怪的錯誤，也至少給個提示
+                // showMessage('系統發生錯誤: ' + e.message, 'error');
+            }
+        });
+
+        window.addEventListener('unhandledrejection', (e) => {
+            console.error('Unhandled Promise Rejection:', e.reason);
+            if (e.reason && e.reason.message && e.reason.message.includes('quota')) {
+                showMessage('資料庫存儲空間已滿 (1GB)，請通知管理員清理。', 'error');
+            }
+        });
 
         const showMessage = (msg, type = "success") => {
             const box = document.getElementById('messageBox');
             box.innerHTML = msg;
             box.className = `fixed top-4 left-1/2 transform -translate-x-1/2 z-50 px-6 py-3 rounded-lg shadow-xl text-white font-bold ${type === 'success' ? 'bg-green-600' : 'bg-red-600'}`;
             box.classList.remove('hidden');
-            setTimeout(() => box.classList.add('hidden'), 3000);
+            // 錯誤訊息停留 6 秒，成功訊息停留 3 秒
+            setTimeout(() => box.classList.add('hidden'), type === 'error' ? 6000 : 3000);
         };
 
         const cleanStr = (str) => {
             if (!str) return "";
-            return str.toString().trim().replace(/[\s\u3000]/g, '').replace(/班$/, '');
+            return str.toString().trim()
+                .replace(/[\s\u3000]/g, '')
+                .replace(/(老師|班)$/, '') // 同時移除「老師」或「班」的結尾
+                .replace(/老師班$/, '');
         };
 
         // ===== 公告事項相關函式 =====
@@ -852,6 +986,8 @@
                 const isPdf = fileType === 'application/pdf';
                 const typeLabel = isImage ? '圖片' : (isPdf ? 'PDF' : '檔案');
                 const typeColor = isImage ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700';
+                const fileSrc = a.fileUrl || a.fileData; // 優化：優先使用 URL
+
                 return `
                     <div class="announcement-card bg-orange-50 p-5 rounded-xl border border-orange-100 shadow-sm mb-4" onclick="viewAnnouncement(${idx})">
                         <div class="flex justify-between items-start mb-2">
@@ -865,7 +1001,7 @@
                             </div>
                             <span class="text-orange-400 text-2xl ml-3">📋</span>
                         </div>
-                        ${isImage ? `<div class="mt-3"><img src="${a.fileData}" class="max-h-48 rounded-lg border border-orange-200 object-contain" alt="${a.title}"></div>` : ''}
+                        ${isImage ? `<div class="mt-3"><img src="${fileSrc}" class="max-h-48 rounded-lg border border-orange-200 object-contain" alt="${a.title}"></div>` : ''}
                         <p class="text-sm text-orange-600 mt-2 font-bold">點擊查看完整內容 →</p>
                     </div>
                 `;
@@ -881,11 +1017,13 @@
             }
             area.innerHTML = allAnnouncements.map((a, idx) => {
                 const dateStr = a.createdAt ? new Date(a.createdAt.seconds * 1000).toLocaleDateString('zh-TW') : '';
+                const hasStorage = !!a.storagePath;
                 return `
                     <div class="flex items-center justify-between bg-gray-50 p-2 rounded-lg border text-xs">
                         <div class="flex-1 truncate">
                             <span class="font-bold text-gray-700">${a.title || '未命名'}</span>
                             <span class="text-gray-400 ml-2">${dateStr}</span>
+                            ${hasStorage ? '<span class="text-[10px] bg-indigo-100 text-indigo-600 px-1 rounded ml-1">Cloud</span>' : ''}
                         </div>
                         <button onclick="deleteAnnouncement('${a.id}', event)" class="text-red-500 hover:text-red-700 font-bold ml-2 px-2 py-1 rounded hover:bg-red-50 transition">刪除</button>
                     </div>
@@ -902,12 +1040,13 @@
             const dateStr = a.createdAt ? new Date(a.createdAt.seconds * 1000).toLocaleDateString('zh-TW') + ' ' + new Date(a.createdAt.seconds * 1000).toLocaleTimeString('zh-TW') : '';
             const isImage = (a.fileType || '').startsWith('image/');
             const isPdf = (a.fileType || '') === 'application/pdf';
+            const fileSrc = a.fileUrl || a.fileData; // 優化：優先使用 URL
 
             let contentHtml = '';
             if (isImage) {
-                contentHtml = `<img src="${a.fileData}" class="announcement-file-preview mx-auto" alt="${a.title}">`;
+                contentHtml = `<img src="${fileSrc}" class="announcement-file-preview mx-auto" alt="${a.title}">`;
             } else if (isPdf) {
-                contentHtml = `<iframe src="${a.fileData}" class="w-full" style="height:75vh; border-radius:8px; border:1px solid #e5e7eb;"></iframe>`;
+                contentHtml = `<iframe src="${fileSrc}" class="w-full" style="height:75vh; border-radius:8px; border:1px solid #e5e7eb;"></iframe>`;
             } else {
                 contentHtml = `<p class="text-gray-500">無法預覽此檔案格式</p>`;
             }
@@ -936,11 +1075,27 @@
             if (event) event.stopPropagation();
             if (!confirm('確定要刪除此公告嗎？')) return;
             try {
-                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'announcements', docId));
+                // 先查找該公告以獲取 Storage 路徑
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'announcements', docId);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    // 如果有 Storage 路徑，則先從 Storage 刪除檔案
+                    if (data.storagePath) {
+                        try {
+                            const storageRef = ref(storage, data.storagePath);
+                            await deleteObject(storageRef);
+                        } catch (storageErr) {
+                            console.warn("從 Storage 刪除檔案失敗 (可能檔案已不存在):", storageErr);
+                        }
+                    }
+                }
+                
+                await deleteDoc(docRef);
                 showMessage('公告已刪除');
                 await loadAnnouncements();
             } catch (err) {
-                console.error(err);
+                console.error("刪除失敗:", err);
                 showMessage('刪除失敗', 'error');
             }
         };
@@ -964,8 +1119,8 @@
                 
                 select.innerHTML = '<option value="">-- 查看歷史記錄 --</option>';
                 mySheets.forEach((s, idx) => {
-                    const dateStr = s.createdAt ? new Date(s.createdAt.seconds * 1000).toLocaleDateString('zh-TW') : '未知';
-                    select.add(new Option(`${dateStr} - ${s.className}`, s.id));
+                    // 顯示費用單的年份與月份，而不是建立日期
+                    select.add(new Option(`${s.year}/${s.month} - ${s.className}`, s.id));
                 });
 
                 document.getElementById('expenseHistorySelect').onchange = (e) => {
@@ -998,10 +1153,28 @@
             }
         }
 
-        window.viewExpenseSheet = (id) => {
+        window.viewExpenseSheet = async (id) => {
             const sheet = allExpenseSheets.find(s => s.id === id);
             if (!sheet) return;
-            renderExpensePreview(sheet.renderData, true); // true means view only
+            
+            // 強度優化：如果費用單內沒有簽名數據，則動態從教師庫抓取
+            const rd = sheet.renderData;
+            if (!rd.signature && (!rd.sigPaths || rd.sigPaths.length === 0)) {
+                try {
+                    const teacher = cleanStr(sheet.teacherName || rd.teacherName);
+                    const sigSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'signatures', teacher));
+                    if (sigSnap.exists()) {
+                        const sigData = sigSnap.data();
+                        if (sigData.paths) rd.sigPaths = sigData.paths;
+                        else if (sigData.signature) rd.signature = sigData.signature;
+                    }
+                } catch (err) {
+                    console.error("動態載入簽名失敗:", err);
+                }
+            }
+            
+            currentPreviewData = rd;
+            renderExpensePreview(rd, true); // true means view only
         };
 
         window.editExpenseSheet = (id) => {
@@ -1040,7 +1213,7 @@
                     2: [1, 7, 8, 14, 15, 16, 17, 18, 19, 20, 21, 22, 28],
                     3: [1, 7, 8, 14, 15, 21, 22, 28, 29],
                     4: [3, 4, 5, 6, 11, 12, 18, 19, 25, 26],
-                    5: [1, 2, 3, 9, 10, 16, 17, 23, 24, 30, 31],
+                    5: [1, 2, 3, 9, 10, 11, 16, 17, 23, 24, 30, 31],
                     6: [6, 7, 13, 14, 19, 20, 21, 27, 28],
                     7: [4, 5, 11, 12, 18, 19, 25, 26],
                     8: [1, 2, 8, 9, 15, 16, 22, 23, 29, 30],
@@ -1105,6 +1278,17 @@
                 showMessage("此日期為非上班日", "error");
                 return;
             }
+
+            // 限制只能選擇同一個月份
+            if (selectedDates.length > 0) {
+                const firstDate = new Date(selectedDates[0].replace(/-/g, '/'));
+                const newDate = new Date(dateStr.replace(/-/g, '/'));
+                if (firstDate.getFullYear() !== newDate.getFullYear() || firstDate.getMonth() !== newDate.getMonth()) {
+                    showMessage("簽到單費用單不能跨月申請", "error");
+                    return;
+                }
+            }
+
             const idx = selectedDates.indexOf(dateStr);
             if (idx > -1) {
                 selectedDates.splice(idx, 1);
@@ -1115,49 +1299,74 @@
         };
 
         // 簽名邏輯
-        let sigCtx, sigDrawing = false;
-
         async function loadSavedSignature() {
             const canvas = document.getElementById('signatureCanvas');
             if (!canvas) return;
             const ctx = canvas.getContext('2d');
             const teacher = localStorage.getItem('currentTeacher');
             if (!teacher) return;
+
+            // 輔助函式：顯示/隱藏升級提示，並鎖定/解鎖「預覽費用單」按鈕
+            function setUpgradeNotice(show) {
+                const notice = document.getElementById('sigUpgradeNotice');
+                const btnGenerate = document.getElementById('btnGenerateExpense');
+                if (!notice || !btnGenerate) return;
+                if (show) {
+                    notice.classList.remove('hidden');
+                    btnGenerate.disabled = true;
+                    btnGenerate.classList.add('opacity-40', 'cursor-not-allowed');
+                    btnGenerate.title = '請先完成簽名升級，再生成費用單';
+                } else {
+                    notice.classList.add('hidden');
+                    btnGenerate.disabled = false;
+                    btnGenerate.classList.remove('opacity-40', 'cursor-not-allowed');
+                    btnGenerate.title = '';
+                }
+            }
             
             // 優先從 Firebase 載入以實現跨裝置同步
             try {
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'signatures', teacher);
                 const docSnap = await getDoc(docRef);
-                let saved = null;
-                if (docSnap.exists()) {
-                    saved = docSnap.data().signature;
-                } else {
-                    // 退而求其次從本地載入舊資料（遷移用）
-                    saved = localStorage.getItem(`sig_${teacher}`);
-                }
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                sigPaths = []; // 先清空，再從 Firebase 載入
+                currentSigPath = [];
 
-                if (saved) {
-                    const img = new Image();
-                    img.onload = () => {
-                        ctx.clearRect(0, 0, canvas.width, canvas.height);
-                        ctx.drawImage(img, 0, 0);
-                    };
-                    img.src = saved;
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    if (data.paths && data.paths.length > 0) {
+                        // ✅ 新格式：字串陣列 — 直接使用，隱藏提示
+                        sigPaths = data.paths;
+                        var decoded = decodePaths(sigPaths);
+                        drawPaths(ctx, decoded);
+                        setUpgradeNotice(false); // 新格式，不需升級
+                    } else if (data.signature) {
+                        // ⚠️ 舊格式：Base64 — 顯示升級提示，鎖定預覽按鈕
+                        const img = new Image();
+                        img.onload = () => { ctx.drawImage(img, 0, 0); };
+                        img.src = data.signature;
+                        setUpgradeNotice(true); // 顯示升級提示
+                    } else {
+                        // 空資料（可能剛被刪除）
+                        setUpgradeNotice(false);
+                    }
                 } else {
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    // Firebase 尚無簽名 — 檢查本地舊快取
+                    const saved = localStorage.getItem(`sig_${teacher}`);
+                    if (saved) {
+                        // ⚠️ 本地有舊 Base64 快取 — 顯示升級提示
+                        const img = new Image();
+                        img.onload = () => { ctx.drawImage(img, 0, 0); };
+                        img.src = saved;
+                        setUpgradeNotice(true);
+                    } else {
+                        // 全新老師，尚未簽名 — 不顯示提示
+                        setUpgradeNotice(false);
+                    }
                 }
             } catch (err) {
                 console.error("載入簽名失敗:", err);
-                // 發生錯誤時嘗試本地
-                const localSaved = localStorage.getItem(`sig_${teacher}`);
-                if (localSaved) {
-                    const img = new Image();
-                    img.onload = () => {
-                        ctx.clearRect(0, 0, canvas.width, canvas.height);
-                        ctx.drawImage(img, 0, 0);
-                    };
-                    img.src = localSaved;
-                }
+                setUpgradeNotice(false);
             }
         }
 
@@ -1181,22 +1390,124 @@
                 const rect = canvas.getBoundingClientRect();
                 const clientX = e.touches ? e.touches[0].clientX : e.clientX;
                 const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-                return { x: clientX - rect.left, y: clientY - rect.top };
+                // 座標標準化 (相對於寬高，確保在不同解析度下顯示一致)
+                return { 
+                    x: Math.round(((clientX - rect.left) / rect.width) * canvas.width), 
+                    y: Math.round(((clientY - rect.top) / rect.height) * canvas.height) 
+                };
             };
 
-            const start = (e) => { sigDrawing = true; sigCtx.beginPath(); const pos = getPos(e); sigCtx.moveTo(pos.x, pos.y); e.preventDefault(); };
-            const move = (e) => { if (!sigDrawing) return; const pos = getPos(e); sigCtx.lineTo(pos.x, pos.y); sigCtx.stroke(); e.preventDefault(); };
-            const end = () => { sigDrawing = false; };
+            const start = (e) => { 
+                sigDrawing = true; 
+                sigCtx.beginPath(); 
+                const pos = getPos(e); 
+                sigCtx.moveTo(pos.x, pos.y); 
+                currentSigPath = [pos];
+                e.preventDefault(); 
+            };
+            const move = (e) => { 
+                if (!sigDrawing) return; 
+                const pos = getPos(e); 
+                sigCtx.lineTo(pos.x, pos.y); 
+                sigCtx.stroke(); 
+                currentSigPath.push(pos);
+                e.preventDefault(); 
+            };
+            const end = () => { 
+                if (sigDrawing && currentSigPath.length > 1) {
+                    // 只在筆畫有效時（超過1個點）才紀錄
+                    sigPaths.push([...currentSigPath]);
+                }
+                sigDrawing = false;
+                currentSigPath = [];
+            };
 
             canvas.addEventListener('mousedown', start);
             canvas.addEventListener('mousemove', move);
             window.addEventListener('mouseup', end);
-            canvas.addEventListener('touchstart', start);
-            canvas.addEventListener('touchmove', move);
+            canvas.addEventListener('touchstart', start, { passive: false });
+            canvas.addEventListener('touchmove', move, { passive: false });
             canvas.addEventListener('touchend', end);
 
             // 載入快取的簽名
             await loadSavedSignature();
+        }
+
+        // 清理單一點，確保 x/y 都是合法有限數字
+        function sanitizePoint(pt) {
+            var x = Number(pt.x), y = Number(pt.y);
+            if (!isFinite(x) || !isFinite(y)) return null;
+            return { x: Math.round(x), y: Math.round(y) };
+        }
+
+        // Douglas-Peucker 路徑抽稀演算法（減少座標點數，避免超出 Firestore 1MB 限制）
+        function simplifyPath(points, tolerance) {
+            if (points.length <= 2) return points;
+            var maxDist = 0, maxIdx = 0;
+            var start = points[0], end = points[points.length - 1];
+            var dx = end.x - start.x, dy = end.y - start.y;
+            var len = Math.sqrt(dx * dx + dy * dy);
+            for (var i = 1; i < points.length - 1; i++) {
+                var dist = len === 0
+                    ? Math.sqrt(Math.pow(points[i].x - start.x, 2) + Math.pow(points[i].y - start.y, 2))
+                    : Math.abs(dy * points[i].x - dx * points[i].y + end.x * start.y - end.y * start.x) / len;
+                if (dist > maxDist) { maxDist = dist; maxIdx = i; }
+            }
+            if (maxDist > tolerance) {
+                var left = simplifyPath(points.slice(0, maxIdx + 1), tolerance);
+                var right = simplifyPath(points.slice(maxIdx), tolerance);
+                return left.slice(0, -1).concat(right);
+            }
+            return [start, end];
+        }
+
+        // 壓縮所有路徑，並轉為 Firestore 可儲存的格式
+        // Firestore 不支援「陣列的陣列」，因此將每條路徑序列化為字串 "x1,y1;x2,y2;..."
+        function compressPaths(paths, tolerance) {
+            tolerance = tolerance || 1.5;
+            var result = [];
+            paths.forEach(function(path) {
+                // 先清理，過濾掉含 NaN/Infinity 的點
+                var clean = path.map(sanitizePoint).filter(function(p) { return p !== null; });
+                if (clean.length < 2) return;
+                // 抽稀
+                var simplified = simplifyPath(clean, tolerance);
+                if (simplified.length < 2) return;
+                // 序列化為字串格式 "x,y;x,y;..."（Firestore 完全支援字串陣列）
+                var encoded = simplified.map(function(p) { return p.x + ',' + p.y; }).join(';');
+                result.push(encoded);
+            });
+            return result; // 回傳字串陣列，例如 ["10,20;15,25;...", "30,40;35,45;..."]
+        }
+
+        // 將 Firestore 字串格式的路徑解碼回 [{x,y},...] 陣列格式（供 drawPaths 使用）
+        function decodePaths(encodedPaths) {
+            if (!encodedPaths || encodedPaths.length === 0) return [];
+            return encodedPaths.map(function(encoded) {
+                return encoded.split(';').map(function(pair) {
+                    var parts = pair.split(',');
+                    return { x: Number(parts[0]), y: Number(parts[1]) };
+                }).filter(function(p) { return isFinite(p.x) && isFinite(p.y); });
+            }).filter(function(path) { return path.length >= 2; });
+        }
+
+        // 渲染座標路徑到指定的 Context
+        function drawPaths(ctx, paths, color, width) {
+            color = color || '#000';
+            width = width || 3;
+            if (!paths || paths.length === 0) return;
+            ctx.lineWidth = width;
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = color;
+            paths.forEach(function(path) {
+                if (path.length < 1) return;
+                ctx.beginPath();
+                ctx.moveTo(path[0].x, path[0].y);
+                for (var i = 1; i < path.length; i++) {
+                    ctx.lineTo(path[i].x, path[i].y);
+                }
+                ctx.stroke();
+            });
         }
 
         // 根據班級與日期判斷預設到勤時間
@@ -1237,16 +1548,60 @@
 
         // 生成預覽
         let currentPreviewData = null;
-        async function generateExpensePreview() {
+        async function generateExpensePreview(arg) {
+            // 修復關鍵 Bug: 當按鈕點擊觸發此函數時，arg 會是 Event 物件(為真)，導致 !skipCheck 判定為假。
+            // 只有當 arg 明確等於 true 時才跳過檢查。
+            const skipCheck = (arg === true);
+            
             const teacherName = localStorage.getItem('currentTeacher');
             const className = document.getElementById('expenseClassSelect').value;
-            const arrivalTime = document.getElementById('expenseArrivalTime').value;
-            const departureTime = document.getElementById('expenseDepartureTime').value;
             const canvas = document.getElementById('signatureCanvas');
             
             if (!className || selectedDates.length === 0) {
                 showMessage('請選擇班級與日期', 'error');
                 return;
+            }
+
+            // 整理資料
+            const dates = [...selectedDates].sort();
+            const firstDateStr = dates[0].replace(/-/g, '/');
+            const firstDate = new Date(firstDateStr);
+            const year = firstDate.getFullYear() - 1911; // 民國年
+            const month = firstDate.getMonth() + 1;
+
+            // 查重邏輯
+            if (!skipCheck) {
+                try {
+                    // 強制重新抓取資料庫，確保數據最新
+                    const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'expenseSheets'));
+                    allExpenseSheets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    
+                    const targetYear = Number(year);
+                    const targetMonth = Number(month);
+                    const targetTeacher = teacherName ? teacherName.toString().trim() : "";
+                    const targetClass = className ? className.toString().trim() : "";
+
+                    const duplicate = allExpenseSheets.find(s => {
+                        const dbTeacher = (s.teacherName || "").toString().trim();
+                        const dbClass = (s.className || "").toString().trim();
+                        const dbYear = Number(s.year);
+                        const dbMonth = Number(s.month);
+
+                        return dbTeacher === targetTeacher && 
+                               dbClass === targetClass && 
+                               dbYear === targetYear && 
+                               dbMonth === targetMonth;
+                    });
+
+                    if (duplicate) {
+                        isOverwriteMode = true;
+                        duplicateDocId = duplicate.id;
+                        document.getElementById('expenseDuplicateConfirmModal').classList.remove('hidden');
+                        return;
+                    }
+                } catch (err) {
+                    console.error("查重出錯:", err);
+                }
             }
 
             // 檢查簽名是否為空
@@ -1255,16 +1610,25 @@
                 return;
             }
 
-            const signatureData = canvas.toDataURL();
-
-            // 整理資料
-            const dates = [...selectedDates].sort();
-            const year = new Date(dates[0]).getFullYear() - 1911; // 民國年
-            const month = new Date(dates[0]).getMonth() + 1;
+            // sigPaths 有兩種可能格式：
+            //   A) 字串陣列 ["x,y;x,y;..."] → 已是新格式，直接使用
+            //   B) 物件陣列 [[{x,y},...]]   → 老師剛簽名尚未上傳，需先壓縮轉換
+            //   C) 空陣列 / null             → 退回 Base64
+            let currentSigPaths = null;
+            if (sigPaths && sigPaths.length > 0) {
+                if (typeof sigPaths[0] === 'string') {
+                    // A) 已是字串格式，直接用
+                    currentSigPaths = sigPaths;
+                } else {
+                    // B) 物件格式，壓縮並轉換為字串格式
+                    currentSigPaths = compressPaths(sigPaths, 1.5);
+                }
+            }
+            // C) currentSigPaths 為 null 時，退回 Base64（相容舊格式）
+            const signatureData = (currentSigPaths && currentSigPaths.length > 0) ? null : canvas.toDataURL();
 
             const items = dates.map(d => {
                 const dateObj = new Date(d.replace(/-/g, '/'));
-                const day = dateObj.getDay();
                 // 這裡根據班級與日期動態決定到勤時間
                 const dynamicArrival = getDefaultArrivalTime(className, d);
                 const dynamicDeparture = "18:20"; // 預設退勤為 18:20
@@ -1283,7 +1647,8 @@
                 year,
                 month,
                 items,
-                signature: signatureData
+                signature: signatureData, // 僅在無 paths 時有值（相容舊資料）
+                sigPaths: currentSigPaths  // 優先存座標路徑（JSON 格式）
             };
 
             renderExpensePreview(currentPreviewData);
@@ -1346,6 +1711,20 @@
         function renderExpensePreview(data, viewOnly = false) {
             const modal = document.getElementById('expensePreviewModal');
             
+            // 優化：如果沒有 Base64 但有路徑資料，先在隱藏 canvas 上繪製並生成 Base64 (僅供顯示)
+            if (!data.signature && data.sigPaths && data.sigPaths.length > 0) {
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = 200;
+                tempCanvas.height = 300;
+                const tempCtx = tempCanvas.getContext('2d');
+                // sigPaths 可能是舊的 [{x,y}] 陣列格式或新的字串格式，統一處理
+                var pathsToDraw = (typeof data.sigPaths[0] === 'string')
+                    ? decodePaths(data.sigPaths)
+                    : data.sigPaths;
+                drawPaths(tempCtx, pathsToDraw);
+                data.signature = tempCanvas.toDataURL();
+            }
+            
             // 整理資料，如果跨時段則拆分成兩項填寫
             const expandedItems = [];
             data.items.forEach(item => {
@@ -1391,7 +1770,12 @@
                         </tr>
                         <tr>
                             <th class="w-16 font-bold py-1 text-[12px]">到勤簽到</th>
-                            ${cols.map(c => `<td style="height: 80px; vertical-align: middle;">${c ? `<img src="${data.signature}" class="max-h-full max-w-full mx-auto object-contain">` : ''}</td>`).join('')}
+                            ${cols.map(c => {
+                                if (!c) return '<td style="height: 80px;"></td>';
+                                // 如果有座標路徑，則動態生成 SVG 或在畫面上渲染 (這裡先用隱藏 canvas 轉小型 Base64 或直接渲染)
+                                // 為了簡單起見，我們在預覽時仍可以使用 Base64，但在儲存時只存座標
+                                return `<td style="height: 80px; vertical-align: middle;"><img src="${data.signature}" class="max-h-full max-w-full mx-auto object-contain"></td>`;
+                            }).join('')}
                         </tr>
                         <tr>
                             <th class="w-16 font-bold py-1 text-[12px]">退勤時間</th>
@@ -1399,7 +1783,10 @@
                         </tr>
                         <tr>
                             <th class="w-16 font-bold py-1 text-[12px]">退勤簽到</th>
-                            ${cols.map(c => `<td style="height: 80px; vertical-align: middle;">${c ? `<img src="${data.signature}" class="max-h-full max-w-full mx-auto object-contain">` : ''}</td>`).join('')}
+                            ${cols.map(c => {
+                                if (!c) return '<td style="height: 80px;"></td>';
+                                return `<td style="height: 80px; vertical-align: middle;"><img src="${data.signature}" class="max-h-full max-w-full mx-auto object-contain"></td>`;
+                            }).join('')}
                         </tr>
                     </table>
                 `;
@@ -1613,25 +2000,40 @@
             btn.innerText = '儲存中...';
             btn.disabled = true;
             try {
+                // 如果是覆蓋模式且有 duplicateDocId，則先刪除舊資料
+                if (isOverwriteMode && duplicateDocId) {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'expenseSheets', duplicateDocId));
+                }
+
+                // 優化：如果有的話，使用座標點取代 Base64 以節省空間
+                const optimizedRenderData = { ...currentPreviewData };
+                if (optimizedRenderData.sigPaths && optimizedRenderData.sigPaths.length > 0) {
+                    delete optimizedRenderData.signature; // 刪除大型 Base64
+                }
+
                 const sheetData = {
                     teacherName: currentPreviewData.teacherName,
                     className: currentPreviewData.className,
                     year: currentPreviewData.year,
                     month: currentPreviewData.month,
-                    renderData: currentPreviewData,
+                    renderData: optimizedRenderData,
                     createdAt: serverTimestamp()
                 };
 
                 if (currentPreviewData.id) {
-                    // 如果有 ID，表示是修改現有資料
+                    // 如果有 ID，表示是修改歷史記錄中的現有資料
                     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'expenseSheets', currentPreviewData.id), sheetData);
                     showMessage('簽到費用單已更新');
                 } else {
-                    // 否則新增
+                    // 否則新增 (可能是全新的或是覆蓋後的全新資料)
                     await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'expenseSheets'), sheetData);
-                    showMessage('簽到費用單已儲存');
+                    showMessage(isOverwriteMode ? '簽到費用單已覆蓋儲存' : '簽到費用單已儲存');
                 }
                 
+                // 重置覆蓋狀態
+                isOverwriteMode = false;
+                duplicateDocId = null;
+
                 document.getElementById('expensePreviewModal').classList.add('hidden');
                 
                 // 清除已選擇的日期，方便下次選擇
@@ -1654,6 +2056,7 @@
         async function refreshData() {
             if (!auth.currentUser) return;
             try {
+                // 檢查 Firestore 是否連線正常
                 const tSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'teachers'));
                 allTeachersData = tSnap.docs.map(doc => doc.data());
                 
@@ -1670,7 +2073,7 @@
                 // 同時載入公告
                 await loadAnnouncements();
 
-                // 初始化管理員刪除功能的下拉選單
+                // 初始化管理員選單
                 const adminDeleteClassSelect = document.getElementById('adminDeleteClassSelect');
                 const adminDeleteTeacherSelect = document.getElementById('adminDeleteTeacherSelect');
                 const adminViewTeacherSigSelect = document.getElementById('adminViewTeacherSigSelect');
@@ -1705,7 +2108,37 @@
                             const docSnap = await getDoc(docRef);
                             if (docSnap.exists()) {
                                 const data = docSnap.data();
-                                displayArea.innerHTML = `<img src="${data.signature}" class="max-h-40 object-contain shadow-inner rounded border">`;
+                                // 修正判斷：paths 存在且有內容才算 JSON 格式
+                                const isJSON = !!(data.paths && Array.isArray(data.paths) && data.paths.length > 0);
+                                const formatLabel = isJSON ? 
+                                    '<span class="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-bold mb-2 inline-block">✅ JSON 格式（已正確上傳）</span>' : 
+                                    '<span class="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-xs font-bold mb-2 inline-block">⚠️ Base64 圖片（舊格式）</span>';
+                                
+                                let imgSrc = "";
+                                if (isJSON) {
+                                    // 新格式：字串陣列，需先 decode 再繪圖
+                                    const canvas = document.createElement('canvas');
+                                    canvas.width = 200; canvas.height = 300;
+                                    const ctx = canvas.getContext('2d');
+                                    drawPaths(ctx, decodePaths(data.paths));
+                                    imgSrc = canvas.toDataURL();
+                                } else if (data.signature) {
+                                    // Base64 舊格式直接顯示
+                                    imgSrc = data.signature;
+                                } else {
+                                    displayArea.innerHTML = '<p class="text-red-400 text-sm">簽名資料異常（無法讀取）</p>';
+                                    return;
+                                }
+
+                                displayArea.innerHTML = `
+                                    <div class="flex flex-col items-center w-full">
+                                        ${formatLabel}
+                                        <img src="${imgSrc}" class="max-h-40 object-contain shadow-inner rounded border mb-4">
+                                        <button onclick="deleteTeacherSignature('${teacher}')" class="bg-red-50 text-red-600 px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-100 border border-red-100 transition w-full">
+                                            🗑️ 刪除簽名並要求重簽
+                                        </button>
+                                    </div>
+                                `;
                             } else {
                                 displayArea.innerHTML = '<p class="text-red-400 text-sm">該老師尚未在系統存儲簽名</p>';
                             }
@@ -1715,6 +2148,19 @@
                         }
                     };
                 }
+
+                window.deleteTeacherSignature = async (teacherName) => {
+                    if (!confirm(`確定要刪除「${teacherName}」老師的簽名嗎？\n刪除後老師登入時將會要求重新簽名。`)) return;
+                    try {
+                        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'signatures', teacherName));
+                        showMessage(`「${teacherName}」老師的簽名已刪除`);
+                        // 重新載入顯示區域
+                        document.getElementById('adminViewTeacherSigSelect').dispatchEvent(new Event('change'));
+                    } catch (err) {
+                        console.error("刪除簽名失敗:", err);
+                        showMessage("刪除簽名失敗", "error");
+                    }
+                };
 
                 if (adminViewTeacherPwdSelect) {
                     adminViewTeacherPwdSelect.innerHTML = '<option value="">-- 請選擇老師 --</option>';
@@ -1735,7 +2181,7 @@
                                 const data = docSnap.data();
                                 displayArea.innerHTML = `<div class="text-2xl font-black text-purple-700 tracking-widest bg-white px-6 py-2 rounded-lg border-2 border-purple-200 shadow-inner">${data.password}</div>`;
                             } else {
-                                displayArea.innerHTML = '<div class="text-lg font-bold text-gray-400">初始密碼：123456</div>';
+                                displayArea.innerHTML = '<div class="text-lg font-bold text-gray-700">初始密碼：123456</div>';
                             }
                         } catch (err) {
                             console.error(err);
@@ -1744,7 +2190,12 @@
                     };
                 }
             } catch (error) { 
-                console.error("同步失敗:", error); 
+                console.error("同步失敗:", error);
+                if (error.message.includes("quota")) {
+                    showMessage("資料庫空間已達上限 (1GB)，請聯絡管理員清理儲存空間", "error");
+                } else {
+                    showMessage("資料載入失敗，請確認網路連線", "error");
+                }
             }
         }
 
@@ -2163,19 +2614,29 @@
                 return;
             }
             const btn = document.getElementById('btnConfirmAnnouncement');
+            const originalText = btn.innerText;
             btn.innerText = '上傳中...';
             btn.disabled = true;
             try {
-                const base64Data = await fileToBase64(pendingAnnouncementFile);
+                // 上傳到 Firebase Storage 以節省 Firestore 空間
+                const timestamp = Date.now();
+                const safeFileName = pendingAnnouncementFile.name.replace(/[^a-zA-Z0-9.]/g, '_');
+                const storagePath = `announcements/${timestamp}_${safeFileName}`;
+                const storageRef = ref(storage, storagePath);
+                
+                const snapshot = await uploadBytes(storageRef, pendingAnnouncementFile);
+                const downloadURL = await getDownloadURL(snapshot.ref);
+
                 await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'announcements'), {
                     title: title,
                     fileName: pendingAnnouncementFile.name,
                     fileType: pendingAnnouncementFile.type,
-                    fileData: base64Data,
+                    fileUrl: downloadURL, // 改存 URL
+                    storagePath: storagePath, // 存路徑方便以後刪除
                     createdAt: serverTimestamp(),
                     uploadedBy: localStorage.getItem('currentTeacher') || '管理員'
                 });
-                showMessage('公告上傳成功');
+                showMessage('公告上傳成功 (已存儲至雲端磁碟)');
                 pendingAnnouncementFile = null;
                 document.getElementById('announcementFile').value = '';
                 document.getElementById('announcementUploadInfo').innerHTML = '';
@@ -2184,9 +2645,9 @@
                 await loadAnnouncements();
             } catch (err) {
                 console.error(err);
-                showMessage('上傳失敗，請確認檔案大小或網路連線', 'error');
+                showMessage('上傳失敗，請確認網路連線或儲存空間', 'error');
             } finally {
-                btn.innerText = '確認上傳公告';
+                btn.innerText = originalText;
                 btn.disabled = false;
             }
         };
@@ -2236,41 +2697,66 @@
             }
         };
 
-        // ===== 自動登出邏輯 (登入後 1.2 小時固定登出) =====
+        // ===== 自動登出邏輯 (登入後 1.2 小時固定登出 - 強化行動裝置支援) =====
         let autoLogoutTimer;
         const SESSION_DURATION = 1.2 * 60 * 60 * 1000; // 4,320,000 毫秒
 
-        function startSessionTimer() {
-            if (autoLogoutTimer) clearTimeout(autoLogoutTimer);
+        // 核心檢查函式：不論是在前景、後台喚醒、或重新整理都會執行此檢查
+        function checkSessionStatus() {
+            const loginTime = localStorage.getItem('loginTime');
+            const teacher = localStorage.getItem('currentTeacher');
             
-            let loginTime = localStorage.getItem('loginTime');
+            if (!teacher) return false; // 未登入狀態不需檢查
+
+            // 如果有老師名字但沒記錄時間（舊程式殘留），立即補上現在時間
             if (!loginTime) {
-                // 如果沒有登入時間但老師已在系統內，補上現在時間
-                loginTime = Date.now().toString();
-                localStorage.setItem('loginTime', loginTime);
+                localStorage.setItem('loginTime', Date.now().toString());
+                return false;
             }
 
             const elapsed = Date.now() - parseInt(loginTime);
+            
+            if (elapsed >= SESSION_DURATION) {
+                // 已過期：清除快取並強制重新整理
+                console.log("Session expired, logging out...");
+                localStorage.removeItem('currentTeacher');
+                localStorage.removeItem('loginTime');
+                // 使用 location.replace 避免後退鍵回到過期頁面
+                location.replace(location.href);
+                return true; 
+            }
+            
+            // 未過期：設置或更新定時器（僅作為前景持續使用時的輔助）
             const remaining = SESSION_DURATION - elapsed;
-
-            if (remaining <= 0) {
+            if (autoLogoutTimer) clearTimeout(autoLogoutTimer);
+            autoLogoutTimer = setTimeout(() => {
                 alert("登入工作階段已達 1.2 小時，系統將自動登出。");
                 logout();
-            } else {
-                autoLogoutTimer = setTimeout(() => {
-                    alert("登入工作階段已達 1.2 小時，系統將自動登出。");
-                    logout();
-                }, remaining);
-            }
+            }, remaining);
+            
+            return false;
         }
 
         function logout() {
             localStorage.removeItem('currentTeacher');
             localStorage.removeItem('loginTime');
-            location.reload();
+            location.replace(location.href);
         }
 
+        // 行動裝置專用：監聽從後台切換回前景的瞬間
+        // 解決 iOS/Android 在背景時 setTimeout 會被掛起的問題
+        ['visibilitychange', 'pageshow', 'focus'].forEach(evt => {
+            window.addEventListener(evt, () => {
+                if (document.visibilityState === 'visible' || evt === 'pageshow' || evt === 'focus') {
+                    checkSessionStatus();
+                }
+            }, true);
+        });
+
         const init = async () => {
+            // 啟動時第一時間檢查是否過期
+            if (checkSessionStatus()) return; 
+
             onAuthStateChanged(auth, async (u) => {
                 user = u;
                 if (user) {
@@ -2282,7 +2768,7 @@
                         document.getElementById('mainSection').classList.remove('hidden');
                         refreshClassDropdowns(saved);
                         await loadSavedSignature();
-                        startSessionTimer(); // 確認登入後開始計時
+                        checkSessionStatus(); // 確認登入後再次同步狀態
                     }
                 }
             });
@@ -2292,23 +2778,38 @@
             });
 
             document.getElementById('btnLogin').onclick = async () => {
-                const name = document.getElementById('loginTeacherInput').value.trim();
-                const password = document.getElementById('loginPasswordInput').value.trim();
+                const nameInput = document.getElementById('loginTeacherInput');
+                const passwordInput = document.getElementById('loginPasswordInput');
+                const name = nameInput.value.trim();
+                const password = passwordInput.value.trim();
                 
                 if (!name) { showMessage("請輸入姓名", "error"); return; }
                 if (!password) { showMessage("請輸入密碼", "error"); return; }
                 
-                const cleanName = cleanStr(name);
-                const isTeacher = allTeachersData.some(t => cleanStr(t.teacherName || t.老師姓名 || t.老師 || '') === cleanName);
-                const isAdmin = cleanName === "管理員";
+                const btn = document.getElementById('btnLogin');
+                const originalText = btn.innerText;
+                btn.disabled = true;
+                btn.innerText = '登入驗證中...';
 
-                if (!isTeacher && !isAdmin) {
-                    showMessage("對不起！系統沒有辨識到您的名字<br>或 請您洽詢 輔導室 #282", "error");
-                    return;
-                }
-
-                // 驗證密碼
                 try {
+                    const cleanName = cleanStr(name);
+                    const isAdmin = cleanName === "管理員";
+
+                    // 如果 allTeachersData 還沒載入完畢，先嘗試載入
+                    if (allTeachersData.length === 0) {
+                        await refreshData();
+                    }
+
+                    const isTeacher = allTeachersData.some(t => cleanStr(t.teacherName || t.老師姓名 || t.老師 || '') === cleanName);
+
+                    if (!isTeacher && !isAdmin) {
+                        showMessage("對不起！系統沒有辨識到您的名字<br>或 請您洽詢 輔導室 #282", "error");
+                        btn.disabled = false;
+                        btn.innerText = originalText;
+                        return;
+                    }
+
+                    // 驗證密碼
                     const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'passwords', cleanName);
                     const docSnap = await getDoc(docRef);
                     let correctPassword = "123456"; // 預設密碼
@@ -2319,6 +2820,8 @@
 
                     if (password !== correctPassword) {
                         showMessage("密碼錯誤，請重新輸入", "error");
+                        btn.disabled = false;
+                        btn.innerText = originalText;
                         return;
                     }
 
@@ -2328,7 +2831,7 @@
                     document.getElementById('displayTeacherName').innerText = name;
                     refreshClassDropdowns(name);
                     await loadSavedSignature();
-                    startSessionTimer(); // 開始登入計時
+                    checkSessionStatus(); // 開始登入計時
                     
                     // 檢查是否為初始密碼，若是則強制修改
                     if (correctPassword === "123456") {
@@ -2341,7 +2844,14 @@
                     }
                 } catch (err) {
                     console.error("登入驗證失敗:", err);
-                    showMessage("系統驗證失敗，請洽管理員", "error");
+                    if (err.message.includes("quota")) {
+                        showMessage("資料庫空間已達上限，登入驗證失敗", "error");
+                    } else {
+                        showMessage("系統驗證失敗，請檢查網路連線", "error");
+                    }
+                } finally {
+                    btn.disabled = false;
+                    btn.innerText = originalText;
                 }
             };
 
@@ -2547,37 +3057,137 @@
                 const canvas = document.getElementById('signatureCanvas');
                 const ctx = canvas.getContext('2d');
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
+                sigPaths = []; // 清空所有路徑（包含從 Firebase 載入的舊路徑）
+                currentSigPath = []; // 同時清空當前筆畫
             };
             document.getElementById('btnConfirmSignature').onclick = async () => {
                 const canvas = document.getElementById('signatureCanvas');
-                const data = canvas.toDataURL();
+                if (isCanvasEmpty(canvas)) {
+                    showMessage('請先簽名', 'error');
+                    return;
+                }
+                // 確保 sigPaths 有內容才能存為 JSON 格式
+                if (!sigPaths || sigPaths.length === 0) {
+                    showMessage('簽名路徑資料異常，請清除後重新簽名', 'error');
+                    return;
+                }
                 const teacher = localStorage.getItem('currentTeacher');
-                if (!teacher) return;
-                
+                if (!teacher) {
+                    showMessage('請先登入再儲存簽名', 'error');
+                    return;
+                }
+                // 確認 Firebase Auth 已就緒
+                if (!auth.currentUser) {
+                    showMessage('系統驗證尚未完成，請稍候再試', 'error');
+                    return;
+                }
+
+                const btn = document.getElementById('btnConfirmSignature');
+                const originalText = btn.innerText;
+                btn.innerText = '上傳中...';
+                btn.disabled = true;
+
                 try {
-                    // 同步到 Firebase 以實現跨裝置
-                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'signatures', teacher), {
-                        signature: data,
+                    // sigPaths 有兩種格式：
+                    //   物件格式 [[{x,y},...]] → 老師剛簽名，需壓縮轉字串
+                    //   字串格式 ["x,y;x,y;..."] → 已壓縮，直接上傳（不應發生，保險起見處理）
+                    let compressedPaths;
+                    if (typeof sigPaths[0] === 'string') {
+                        compressedPaths = sigPaths; // 已是字串格式，直接用
+                    } else {
+                        compressedPaths = compressPaths(sigPaths, 1.5); // 物件格式，壓縮並轉字串
+                    }
+                    
+                    if (!compressedPaths || compressedPaths.length === 0) {
+                        showMessage('簽名壓縮後無有效資料，請清除後重新簽名', 'error');
+                        btn.innerText = originalText;
+                        btn.disabled = false;
+                        return;
+                    }
+
+                    // 用 cleanStr 確保 teacher 名稱不含特殊字元（Firestore document ID 不可含 / 等）
+                    const teacherDocId = teacher.trim();
+
+                    // 估算資料大小（除錯用）
+                    const dataSize = JSON.stringify(compressedPaths).length;
+                    console.log(`簽名壓縮前：${sigPaths.reduce((s,p)=>s+p.length,0)} 點，壓縮後：${compressedPaths.reduce((s,p)=>s+p.length,0)} 點，約 ${(dataSize/1024).toFixed(1)} KB`);
+
+                    // 寫入 Firebase：只存 JSON 路徑格式（省空間、跨裝置）
+                    const sigDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'signatures', teacherDocId);
+                    await setDoc(sigDocRef, {
+                        paths: compressedPaths,
                         updatedAt: serverTimestamp()
                     });
                     
-                    // 傳統本地存儲保留一份作為快取
-                    localStorage.setItem(`sig_${teacher}`, data);
-                    showMessage('簽名已跨裝置同步存儲');
+                    // 更新本機 sigPaths 為壓縮後的版本，保持一致
+                    sigPaths = compressedPaths;
+                    // 清除舊 Base64 快取，避免混淆
+                    localStorage.removeItem(`sig_${teacher}`);
+                    // ✅ 上傳成功：隱藏升級提示，解鎖「預覽費用單」按鈕
+                    const notice = document.getElementById('sigUpgradeNotice');
+                    const btnGenerate = document.getElementById('btnGenerateExpense');
+                    if (notice) notice.classList.add('hidden');
+                    if (btnGenerate) {
+                        btnGenerate.disabled = false;
+                        btnGenerate.classList.remove('opacity-40', 'cursor-not-allowed');
+                        btnGenerate.title = '';
+                    }
+                    showMessage('簽名已成功上傳至系統，格式升級完成！');
                 } catch (err) {
-                    console.error("儲存簽名失敗:", err);
-                    localStorage.setItem(`sig_${teacher}`, data);
-                    showMessage('儲存失敗，僅存儲於此裝置', 'error');
+                    console.error("儲存簽名失敗 - code:", err.code, " message:", err.message, err);
+                    let errMsg = '上傳失敗';
+                    if (err.code === 'resource-exhausted' || (err.message && err.message.includes('quota'))) {
+                        errMsg = '資料庫空間已滿，請聯絡管理員清理';
+                    } else if (err.code === 'permission-denied') {
+                        errMsg = '權限不足，請重新整理頁面後再試';
+                    } else if (err.code === 'unauthenticated') {
+                        errMsg = '登入已過期，請重新整理頁面';
+                    } else if (err.code === 'unavailable' || (err.message && err.message.toLowerCase().includes('network'))) {
+                        errMsg = '網路連線失敗，請確認網路後重試';
+                    } else if (err.message && err.message.includes('too large')) {
+                        errMsg = '簽名資料過大，請清除後重新簽名';
+                    } else {
+                        errMsg = `上傳失敗 (${err.code || err.message || '未知錯誤'})`;
+                    }
+                    showMessage(errMsg, 'error');
+                } finally {
+                    btn.innerText = originalText;
+                    btn.disabled = false;
                 }
             };
 
             document.getElementById('btnGenerateExpense').onclick = generateExpensePreview;
             document.getElementById('btnCancelPreview').onclick = () => {
                 document.getElementById('expensePreviewModal').classList.add('hidden');
+                // 取消預覽時重置覆蓋狀態
+                isOverwriteMode = false;
+                duplicateDocId = null;
             };
             document.getElementById('btnConfirmExpense').onclick = saveExpenseSheet;
 
+            // 重複申請確認 Modal 按鈕
+            document.getElementById('btnCancelOverwrite').onclick = () => {
+                document.getElementById('expenseDuplicateConfirmModal').classList.add('hidden');
+                // 取消則清空所有點的日期及選擇的班級，回到原點
+                selectedDates = [];
+                const dateText = document.getElementById('selectedDatesText');
+                if (dateText) dateText.innerText = '尚未選擇日期';
+                document.getElementById('expenseClassSelect').value = '';
+                isOverwriteMode = false;
+                duplicateDocId = null;
+                showMessage("已取消申請並清空資料");
+            };
+
+            document.getElementById('btnConfirmOverwrite').onclick = () => {
+                document.getElementById('expenseDuplicateConfirmModal').classList.add('hidden');
+                // 覆蓋則繼續生成預覽
+                generateExpensePreview(true); // skipCheck = true
+            };
+
+            // 數據遷移與清理功能
             // 管理員歷史點名資料刪除功能
+            document.getElementById('btnEstimateSize').onclick = estimateStorageSize;
+            document.getElementById('btnCleanupTeachers').onclick = cleanupInactiveTeachers;
             document.getElementById('btnAdminQueryDelete').onclick = async () => {
                 const cls = document.getElementById('adminDeleteClassSelect').value;
                 const teacher = document.getElementById('adminDeleteTeacherSelect').value;
@@ -2675,6 +3285,103 @@
             document.getElementById('expenseHistorySelect').onchange = (e) => {
                 if (e.target.value) viewExpenseSheet(e.target.value);
             };
+
+            async function estimateStorageSize() {
+                const status = document.getElementById('sizeStatus');
+                const btn = document.getElementById('btnEstimateSize');
+                const originalText = btn.innerText;
+                btn.disabled = true;
+                btn.innerText = '估算中...';
+                
+                try {
+                    let totalBytes = 0;
+                    let collections = [
+                        { name: 'signatures', label: '教師簽名庫' },
+                        { name: 'expenseSheets', label: '簽到費用單' },
+                        { name: 'attendance', label: '點名紀錄' },
+                        { name: 'announcements', label: '公告資料' }
+                    ];
+
+                    let report = "【資料佔用空間估算】\n";
+
+                    for (const col of collections) {
+                        status.innerText = `正在估算 ${col.label}...`;
+                        const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', col.name));
+                        let colBytes = 0;
+                        snap.docs.forEach(d => {
+                            colBytes += JSON.stringify(d.data()).length * 2; 
+                        });
+                        totalBytes += colBytes;
+                        report += `- ${col.label}: ${(colBytes / 1024 / 1024).toFixed(2)} MB\n`;
+                    }
+
+                    const totalMB = (totalBytes / 1024 / 1024).toFixed(2);
+                    const totalGB = (totalBytes / 1024 / 1024 / 1024).toFixed(4);
+                    
+                    report += `\n總計估算：${totalMB} MB (${totalGB} GB)`;
+                    alert(report);
+                    status.innerText = `上次估算：${totalMB} MB`;
+                } catch (err) {
+                    console.error("估算失敗:", err);
+                    status.innerText = '估算出錯';
+                } finally {
+                    btn.disabled = false;
+                    btn.innerText = originalText;
+                }
+            }
+
+            async function cleanupInactiveTeachers() {
+                if (!confirm('確定要執行清理嗎？這將永久刪除超過 1 年未使用的教師資料（簽名、費用單等）。')) return;
+                const status = document.getElementById('cleanupStatus');
+                const btn = document.getElementById('btnCleanupTeachers');
+                const originalText = btn.innerText;
+                btn.disabled = true;
+                btn.innerText = '清理中...';
+                try {
+                    status.innerText = '正在掃描非活躍教師...';
+                    const oneYearAgo = new Date();
+                    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+                    
+                    const signaturesSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'signatures'));
+                    let deletedCount = 0;
+                    
+                    for (const sigDoc of signaturesSnap.docs) {
+                        const teacherName = sigDoc.id;
+                        if (teacherName === "管理員") continue;
+
+                        const data = sigDoc.data();
+                        const lastActive = data.updatedAt?.toDate() || new Date(0); 
+
+                        if (lastActive < oneYearAgo) {
+                            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'signatures', teacherName));
+                            
+                            const expenseQuery = query(
+                                collection(db, 'artifacts', appId, 'public', 'data', 'expenseSheets'),
+                                where('teacherName', '==', teacherName)
+                            );
+                            const expenseSnap = await getDocs(expenseQuery);
+                            for (const expDoc of expenseSnap.docs) {
+                                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'expenseSheets', expDoc.id));
+                            }
+                            
+                            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'passwords', cleanStr(teacherName)));
+                            
+                            deletedCount++;
+                            status.innerText = `已清理 ${deletedCount} 位教師資料...`;
+                        }
+                    }
+                    
+                    showMessage(`清理完成！共移除 ${deletedCount} 位非活躍教師的相關資料`);
+                    status.innerText = '清理完成';
+                } catch (err) {
+                    console.error("清理失敗:", err);
+                    showMessage('清理過程中發生錯誤', 'error');
+                    status.innerText = '清理出錯';
+                } finally {
+                    btn.disabled = false;
+                    btn.innerText = originalText;
+                }
+            }
 
             await initSignature();
         };
