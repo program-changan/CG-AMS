@@ -78,6 +78,8 @@
         };
     </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         /* 基礎樣式設定 */
         body { font-family: "標楷體", "DFKai-SB", serif; background-color: #f3f4f6; }
@@ -225,7 +227,6 @@
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
             background: rgba(0,0,0,0.9);
-            z-index: 200;
             overflow: hidden;
             padding: 10px;
             display: flex;
@@ -269,53 +270,36 @@
         @media print {
             @page {
                 size: A4;
-                margin: 0mm; /* 設為 0 以隱藏預設頁首頁尾 */
+                margin: 0mm;
             }
-            html, body { 
-                margin: 0; 
-                padding: 0; 
-                background: white; 
-                width: 210mm; 
+            html, body {
+                margin: 0;
+                padding: 0;
+                background: white;
+                width: 210mm;
                 height: 297mm;
                 overflow: hidden !important;
             }
+            /* 隱藏所有內容 */
             body * { visibility: hidden; }
-            .preview-overlay, .preview-overlay * { visibility: visible; }
-            .preview-overlay { 
-                position: absolute; 
-                left: 0; top: 0; 
-                background: white; 
-                padding: 0; 
-                width: 210mm; 
-                height: 297mm;
-                overflow: hidden !important;
-            }
-            .a4-preview-wrapper { 
-                width: 210mm !important; 
-                height: 297mm !important; 
-                overflow: hidden !important;
-                display: block !important;
-            }
-            .a4-scroll-area { 
-                width: 210mm !important; 
-                height: 297mm !important; 
-                overflow: hidden !important;
-                display: block !important;
-            }
-            .a4-container { 
-                box-shadow: none !important; 
-                margin: 0 !important; 
-                transform: scale(1) !important; 
-                zoom: 0.95; /* 增加邊距後，稍微降低 zoom 以確保依然不分頁 */
-                position: absolute !important;
+            /* 只顯示 A4 容器本身 */
+            #a4PreviewContainer,
+            #a4PreviewContainer * { visibility: visible; }
+            #a4PreviewContainer {
+                position: fixed !important;
                 top: 0 !important;
                 left: 0 !important;
+                margin: 0 !important;
+                box-shadow: none !important;
+                transform: none !important;
+                zoom: 0.95;
                 width: 210mm !important;
-                height: 296.5mm !important; 
-                padding: 10mm 15mm 10mm 20mm !important; /* 同步增加列印邊距 */
+                height: 297mm !important;
+                max-height: 297mm !important;
+                padding: 10mm 15mm 10mm 20mm !important;
                 box-sizing: border-box !important;
                 border: none !important;
-                break-after: avoid !important;
+                overflow: hidden !important;
                 page-break-after: avoid !important;
                 page-break-inside: avoid !important;
             }
@@ -565,16 +549,13 @@
             <div id="expensePage" class="hidden bg-white rounded-xl shadow-md p-6">
                 <h3 class="text-xl font-bold mb-4 border-l-4 border-indigo-600 pl-3">簽到費用單製作</h3>
                 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                    <!-- A. 歷史簽到費用單 -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <!-- A. 歷史簽到費用單（個人） -->
                     <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2">歷史簽到費用單</label>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">我的歷史費用單</label>
                         <select id="expenseHistorySelect" class="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-indigo-500 outline-none">
-                            <option value="">-- 查看歷史記錄 --</option>
+                            <option value="">-- 查看我的歷史記錄 --</option>
                         </select>
-                        <div id="adminExpenseList" class="hidden mt-4 space-y-2 max-h-60 overflow-y-auto border p-2 rounded bg-gray-50">
-                            <!-- 管理員可見的完整列表 -->
-                        </div>
                     </div>
 
                     <!-- B. 選擇上課班級 -->
@@ -585,30 +566,14 @@
                         </select>
                     </div>
 
-                    <!-- C. 日期選擇 -->
+                    <!-- C. 簽到月份選擇 -->
                     <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2">上課日期 (可多選)</label>
-                        <button id="btnOpenCalendar" class="w-full p-3 border rounded-lg bg-white text-left flex justify-between items-center hover:bg-gray-50">
-                            <span id="selectedDatesText">尚未選擇日期</span>
-                            <span class="text-indigo-600">📅</span>
-                        </button>
-                    </div>
-
-                    <!-- D & E. 到勤/退勤時間 -->
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-bold text-gray-700 mb-2">到勤時間</label>
-                            <select id="expenseArrivalTime" class="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-indigo-500 outline-none">
-                                <option value="12:40">12:40</option>
-                                <option value="16:00">16:00</option>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">簽到月份 <span class="text-xs text-indigo-500 font-normal">(依班表自動生成上課日)</span></label>
+                        <div class="flex gap-2 items-center">
+                            <select id="expenseMonthSelect" class="flex-1 p-3 border rounded-xl bg-white focus:ring-2 focus:ring-indigo-500 outline-none text-base font-bold text-indigo-700">
+                                <option value="">-- 請選擇月份 --</option>
                             </select>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-bold text-gray-700 mb-2">退勤時間</label>
-                            <select id="expenseDepartureTime" class="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-indigo-500 outline-none">
-                                <option value="16:00">16:00</option>
-                                <option value="18:20">18:20</option>
-                            </select>
+                            <span id="selectedDatesText" class="text-sm text-gray-500 whitespace-nowrap hidden lg:inline"></span>
                         </div>
                     </div>
                 </div>
@@ -644,52 +609,6 @@
 
                 <!-- 5. 生成按鈕 -->
                 <button id="btnGenerateExpense" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-xl shadow-lg transition duration-200 text-xl">預覽 簽到費用單</button>
-            </div>
-
-            <!-- 日曆選擇 Modal -->
-            <div id="calendarModal" class="fixed inset-0 bg-black bg-opacity-50 z-[150] hidden flex items-center justify-center p-4">
-                <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
-                    <div class="bg-indigo-600 p-4 text-white flex justify-between items-center">
-                        <button id="prevMonth" class="text-2xl">&lt;</button>
-                        <h4 id="calendarMonthTitle" class="text-lg font-bold">2024年 3月</h4>
-                        <button id="nextMonth" class="text-2xl">&gt;</button>
-                    </div>
-                    <div class="p-4">
-                        <div class="grid grid-cols-7 gap-1 text-center text-xs font-bold text-gray-500 mb-2">
-                            <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
-                        </div>
-                        <div id="calendarGrid" class="expense-calendar-grid"></div>
-                        <div class="mt-6 flex gap-3">
-                            <button id="btnCancelCalendar" class="flex-1 py-2 bg-gray-100 text-gray-600 rounded-lg font-bold">取消</button>
-                            <button id="btnConfirmCalendar" class="flex-1 py-2 bg-indigo-600 text-white rounded-lg font-bold">確認</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 費用單重複確認 Modal -->
-        <div id="expenseDuplicateConfirmModal" class="fixed inset-0 bg-black bg-opacity-50 z-[250] hidden flex items-center justify-center p-4">
-            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center">
-                <div class="text-6xl mb-4">⚠️</div>
-                <h3 class="text-2xl font-bold text-gray-800 mb-2">重複申請確認</h3>
-                <p id="expenseDuplicateConfirmMsg" class="text-gray-600 mb-8 text-lg">同1個月份同1個班己經申請過，請問是否覆蓋？</p>
-                <div class="flex gap-4">
-                    <button id="btnCancelOverwrite" class="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold text-lg hover:bg-gray-200 transition">取消</button>
-                    <button id="btnConfirmOverwrite" class="flex-1 py-3 bg-orange-600 text-white rounded-xl font-bold text-lg hover:bg-orange-700 shadow-lg transition">覆蓋</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- 費用單預覽 Modal -->
-            <div id="expensePreviewModal" class="preview-overlay hidden">
-                <div class="flex gap-4 mb-4 no-print">
-                    <button id="btnCancelPreview" class="px-8 py-3 bg-gray-200 text-gray-700 rounded-xl font-bold text-lg hover:bg-gray-300">取消</button>
-                    <button id="btnConfirmExpense" class="px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold text-lg hover:bg-indigo-700 shadow-lg">確認生成</button>
-                    <button onclick="window.print()" class="px-8 py-3 bg-green-600 text-white rounded-xl font-bold text-lg hover:bg-green-700 shadow-lg">列印</button>
-                </div>
-                <div id="a4PreviewContainer" class="a4-container">
-                    <!-- A4 Table Content will be generated here -->
-                </div>
             </div>
 
             <!-- 分頁：公告事項 -->
@@ -735,6 +654,203 @@
                     </div>
                 </div>
 
+                <!-- 六年級畢業班停止上課日期設定 -->
+                <div class="mt-10 border-t-2 border-gray-100 pt-8">
+                    <h4 class="text-xl font-bold mb-6 text-violet-700 flex items-center">
+                        <span class="mr-2">🎓</span> 六年級畢業班停止上課設定
+                    </h4>
+                    <div class="bg-violet-50 p-6 rounded-2xl border border-violet-100">
+                        <p class="text-sm text-gray-600 mb-4">設定六年級班級的最後上課日期（含當天）。在製作簽到費用單時，超過此日期的上課日將自動被排除，並在預覽時顯示警示。</p>
+                        <div class="flex flex-wrap gap-4 items-end">
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-2">六年級最後上課日期</label>
+                                <input type="date" id="grade6StopDateInput" class="p-3 border rounded-xl bg-white focus:ring-2 focus:ring-violet-400 outline-none text-base font-bold text-violet-700">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-2">班級名稱關鍵字 <span class="text-xs font-normal text-gray-500">（含此字的班級視為六年級，逗號分隔）</span></label>
+                                <input type="text" id="grade6KeywordsInput" placeholder="例：六年,6年,畢業" class="p-3 border rounded-xl bg-white focus:ring-2 focus:ring-violet-400 outline-none text-sm w-72">
+                            </div>
+                            <div>
+                                <button id="btnSaveGrade6Config" class="bg-violet-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-violet-700 transition shadow">儲存設定</button>
+                            </div>
+                        </div>
+                        <div id="grade6ConfigStatus" class="text-sm text-violet-700 font-semibold mt-3 hidden"></div>
+                    </div>
+                </div>
+
+                <!-- 所有教師簽到費用單查詢（管理員）-->
+                <div class="mt-10 border-t-2 border-gray-100 pt-8">
+                    <h4 class="text-xl font-bold mb-6 text-indigo-700 flex items-center">
+                        <span class="mr-2">📋</span> 所有教師簽到費用單查詢
+                    </h4>
+                    <div class="bg-indigo-50 p-6 rounded-2xl border border-indigo-100">
+                        <!-- 篩選列：月份 + 老師（下拉） -->
+                        <div class="flex flex-wrap gap-4 items-end mb-5">
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-2">查詢月份</label>
+                                <select id="adminExpenseMonthFilter" class="p-3 border rounded-xl bg-white focus:ring-2 focus:ring-indigo-400 outline-none font-bold text-indigo-700 min-w-[160px]">
+                                    <option value="">-- 所有月份 --</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-2">查詢老師</label>
+                                <select id="adminExpenseTeacherFilter" class="p-3 border rounded-xl bg-white focus:ring-2 focus:ring-indigo-400 outline-none min-w-[140px]">
+                                    <option value="">-- 所有老師 --</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-2">查詢班級</label>
+                                <select id="adminExpenseClassFilter" class="p-3 border rounded-xl bg-white focus:ring-2 focus:ring-indigo-400 outline-none min-w-[140px]">
+                                    <option value="">-- 所有班級 --</option>
+                                </select>
+                            </div>
+                            <button onclick="renderAdminExpenseTable()" class="bg-indigo-600 text-white px-5 py-3 rounded-xl font-bold hover:bg-indigo-700 transition shadow">🔍 查詢</button>
+                        </div>
+                        <!-- 結果列表 -->
+                        <div id="adminExpenseTable" class="space-y-2 max-h-[500px] overflow-y-auto">
+                            <p class="text-gray-400 text-center py-6">請選擇條件後按「查詢」</p>
+                        </div>
+                        <div id="adminExpenseCount" class="text-xs text-gray-500 mt-3 text-right"></div>
+                    </div>
+                </div>
+
+                <!-- 老師請假 / 代課管理 -->
+                <div class="mt-10 border-t-2 border-gray-100 pt-8">
+                    <h4 class="text-xl font-bold mb-6 text-rose-700 flex items-center">
+                        <span class="mr-2">📝</span> 老師請假 / 代課管理
+                    </h4>
+                    <div class="bg-rose-50 p-6 rounded-2xl border border-rose-100">
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-2">請假老師</label>
+                                <select id="leaveTeacherSelect" class="w-full p-3 border rounded-lg bg-white"></select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-2">上課班級</label>
+                                <select id="leaveClassSelect" class="w-full p-3 border rounded-lg bg-white"></select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-2">請假日期</label>
+                                <input type="date" id="leaveDateInput" class="w-full p-3 border rounded-lg bg-white">
+                                <p id="leaveDateWeekdayHint" class="text-xs text-amber-600 mt-1 hidden font-semibold"></p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-2">請假時間段 <span class="text-xs text-indigo-600 font-normal">(依班表自動帶入)</span></label>
+                                <select id="leaveTimeSelect" class="w-full p-3 border rounded-lg bg-white">
+                                    <option value="">-- 請先選擇老師/班級/日期 --</option>
+                                    <option value="12:40~18:20">12:40~18:20</option>
+                                    <option value="12:40~16:00">12:40~16:00</option>
+                                    <option value="16:00~18:20">16:00~18:20</option>
+                                </select>
+                                <p id="leaveTimeHint" class="text-xs text-indigo-600 mt-1 hidden"></p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-2">A 代課老師</label>
+                                <select id="subTeacherASelect" class="w-full p-3 border rounded-lg bg-white"></select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-2">A 上課時間段</label>
+                                <select id="subTimeASelect" class="w-full p-3 border rounded-lg bg-white">
+                                    <option value="">-- 不指派 --</option>
+                                    <option value="12:40~18:20">12:40~18:20</option>
+                                    <option value="12:40~16:00">12:40~16:00</option>
+                                    <option value="16:00~18:20">16:00~18:20</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-2">B 代課老師</label>
+                                <select id="subTeacherBSelect" class="w-full p-3 border rounded-lg bg-white"></select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-gray-700 mb-2">B 上課時間段</label>
+                                <select id="subTimeBSelect" class="w-full p-3 border rounded-lg bg-white">
+                                    <option value="">-- 不指派 --</option>
+                                    <option value="12:40~18:20">12:40~18:20</option>
+                                    <option value="12:40~16:00">12:40~16:00</option>
+                                    <option value="16:00~18:20">16:00~18:20</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mt-4 flex gap-3">
+                            <button id="btnSaveLeaveSub" class="bg-rose-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-rose-700 transition">儲存請假/代課</button>
+                            <button id="btnReloadLeaveSub" class="bg-white text-rose-700 px-6 py-3 rounded-xl font-bold border border-rose-200 hover:bg-rose-100 transition">重新整理清單</button>
+                        </div>
+                        <div id="leaveSubListArea" class="mt-4 bg-white rounded-xl border border-rose-100 p-3 max-h-56 overflow-y-auto text-sm"></div>
+                    </div>
+                </div>
+
+                <!-- 老師互調班管理 -->
+                <div class="mt-10 border-t-2 border-gray-100 pt-8">
+                    <h4 class="text-xl font-bold mb-6 text-cyan-700 flex items-center">
+                        <span class="mr-2">🔁</span> 老師互調班管理
+                    </h4>
+                    <div class="bg-cyan-50 p-6 rounded-2xl border border-cyan-100">
+                        <!-- 第一行：老師 A（欄位順序：老師→班級→調課日期→時間段）-->
+                        <div class="mb-3 pb-4 border-b border-cyan-200">
+                            <div class="text-xs font-black text-cyan-700 bg-cyan-100 inline-block px-3 py-1 rounded-full mb-3">老師 A 調課資料</div>
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                <div>
+                                    <label class="block text-sm font-bold text-gray-700 mb-2">老師 A</label>
+                                    <select id="swapTeacherASelect" class="w-full p-3 border rounded-lg bg-white"></select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-bold text-gray-700 mb-2">老師 A 班級</label>
+                                    <select id="swapClassASelect" class="w-full p-3 border rounded-lg bg-white">
+                                        <option value="">-- 請先選擇老師 A --</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-bold text-gray-700 mb-2">A 調課日期</label>
+                                    <input type="date" id="swapDateInput" class="w-full p-3 border rounded-lg bg-white">
+                                    <p id="swapDateAHint" class="text-xs text-amber-600 mt-1 hidden font-semibold"></p>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-bold text-gray-700 mb-2">老師 A 時間段</label>
+                                    <select id="swapTimeASelect" class="w-full p-3 border rounded-lg bg-white">
+                                        <option value="12:40~18:20">12:40~18:20</option>
+                                        <option value="12:40~16:00">12:40~16:00</option>
+                                        <option value="16:00~18:20">16:00~18:20</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- 第二行：老師 B（欄位順序：老師→班級→調課日期→時間段）-->
+                        <div class="mb-1">
+                            <div class="text-xs font-black text-teal-700 bg-teal-100 inline-block px-3 py-1 rounded-full mb-3">老師 B 調課資料</div>
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                <div>
+                                    <label class="block text-sm font-bold text-gray-700 mb-2">老師 B</label>
+                                    <select id="swapTeacherBSelect" class="w-full p-3 border rounded-lg bg-white"></select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-bold text-gray-700 mb-2">老師 B 班級</label>
+                                    <select id="swapClassBSelect" class="w-full p-3 border rounded-lg bg-white">
+                                        <option value="">-- 請先選擇老師 B --</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-bold text-gray-700 mb-2">B 調課日期</label>
+                                    <input type="date" id="swapDateBInput" class="w-full p-3 border rounded-lg bg-white">
+                                    <p id="swapDateBHint" class="text-xs text-amber-600 mt-1 hidden font-semibold"></p>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-bold text-gray-700 mb-2">老師 B 時間段</label>
+                                    <select id="swapTimeBSelect" class="w-full p-3 border rounded-lg bg-white">
+                                        <option value="12:40~18:20">12:40~18:20</option>
+                                        <option value="12:40~16:00">12:40~16:00</option>
+                                        <option value="16:00~18:20">16:00~18:20</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-4 flex gap-3">
+                            <button id="btnSaveSwap" class="bg-cyan-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-cyan-700 transition">儲存互調班</button>
+                            <button id="btnReloadSwap" class="bg-white text-cyan-700 px-6 py-3 rounded-xl font-bold border border-cyan-200 hover:bg-cyan-100 transition">重新整理清單</button>
+                        </div>
+                        <div id="swapListArea" class="mt-4 bg-white rounded-xl border border-cyan-100 p-3 max-h-56 overflow-y-auto text-sm"></div>
+                    </div>
+                </div>
+
                 <!-- 查詢教師簽名 (管理員專用) -->
                 <div class="mt-12 border-t-2 border-gray-100 pt-8 grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div class="bg-indigo-50 p-6 rounded-2xl border border-indigo-100">
@@ -774,11 +890,12 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div class="bg-blue-50 p-6 rounded-2xl border border-blue-100">
                             <h5 class="text-lg font-bold mb-4 text-blue-900">儲存空間查詢</h5>
-                            <p class="text-sm text-gray-600 mb-6">及時估算 Firebase 資料庫中各項數據的佔用量。</p>
+                            <p class="text-sm text-gray-600 mb-4">估算 Firebase Firestore 各項資料的佔用空間，包含課表、名單、請假、調班、簽到費用單及點名記錄。</p>
                             <button id="btnEstimateSize" class="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition shadow-md">
                                 📊 立即估算儲存空間
                             </button>
                             <div id="sizeStatus" class="text-xs text-center text-gray-500 mt-2"></div>
+                            <div id="storageResultArea"></div>
                         </div>
                         
                         <div class="bg-amber-50 p-6 rounded-2xl border border-amber-100">
@@ -902,7 +1019,10 @@
         let globalHistoryLogs = [];
         let allAnnouncements = [];
         let allExpenseSheets = []; // 存儲簽到費用單資料
+        let allLeaveSubRecords = []; // 老師請假/代課記錄
+        let allClassSwapRecords = []; // 老師互調班記錄
         let selectedDates = []; // 存儲日曆中選擇的日期
+        let originalSelectedDates = []; // 暫存進入預覽修改前的選擇狀態
         let sigPaths = []; // 新增：存儲簽名路徑 (JSON 座標點)
         let currentSigPath = []; // 新增：存儲當前筆畫
         let sigDrawing = false;
@@ -911,6 +1031,7 @@
         let pendingAnnouncementFile = null; // 暫存待上傳的公告檔案
         let isOverwriteMode = false; // 是否處於覆蓋模式
         let duplicateDocId = null; // 重複資料的 ID
+        let calendarMode = 'multi'; // 'multi'= 一般多選模式, 'single'= 新增日期單選模式
 
         window.addEventListener('error', (e) => {
             console.error('Unhandled Error:', e.error);
@@ -945,6 +1066,110 @@
                 .replace(/(老師|班)$/, '') // 同時移除「老師」或「班」的結尾
                 .replace(/老師班$/, '');
         };
+
+        const TIME_SLOT_OPTIONS = ["12:40~18:20", "12:40~16:00", "16:00~18:20"];
+
+        const normalizeDateStr = (input) => {
+            if (!input) return '';
+            if (typeof input === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input)) return input;
+            const d = new Date(input);
+            if (Number.isNaN(d.getTime())) return '';
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        };
+
+        const toSlotFromRange = (start, end) => {
+            if (start === "12:40" && end === "18:20") return "12:40~18:20";
+            if (start === "12:40" && end === "16:00") return "12:40~16:00";
+            if (start === "16:00" && end === "18:20") return "16:00~18:20";
+            return '';
+        };
+
+        const parseCycleTextToWeekdays = (cycleText) => {
+            const txt = (cycleText || '').toString();
+            const map = { '日': 0, '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6 };
+            return [...new Set(Object.keys(map).filter(k => txt.includes(k)).map(k => map[k]))];
+        };
+
+        const getTeacherClassPairs = (teacherName) => {
+            const teacherKey = cleanStr(teacherName);
+            return allTeachersData
+                .filter(t => cleanStr(t.teacherName || t.老師姓名 || t.老師 || '') === teacherKey)
+                .map(t => ({
+                    className: (t.className || t.上課班級 || t.班級 || '').toString().trim(),
+                    cycle: (t.cycle || t.上課週期 || '').toString(),
+                    timeSlot: (t.timeSlot || t.上課時間段 || '').toString() || toSlotFromRange((t.arrival || '').toString(), (t.departure || '').toString())
+                }))
+                .filter(r => r.className);
+        };
+
+        function resolveAuthorizedClasses(teacherName, dateStr) {
+            const teacherKey = cleanStr(teacherName);
+            const dateKey = normalizeDateStr(dateStr || new Date());
+            const classSet = new Set();
+
+            // 原始排課班級
+            getTeacherClassPairs(teacherName).forEach(x => classSet.add(x.className));
+
+            // 請假代課：代課老師當天增加班級權限
+            allLeaveSubRecords.forEach(r => {
+                if (normalizeDateStr(r.leaveDate) !== dateKey) return;
+                const className = r.className || '';
+                if (!className) return;
+                if (cleanStr(r.subTeacherA) === teacherKey && r.subTimeA) classSet.add(className);
+                if (cleanStr(r.subTeacherB) === teacherKey && r.subTimeB) classSet.add(className);
+                if (cleanStr(r.leaveTeacher) === teacherKey) classSet.add(className); // 請假老師可查詢
+            });
+
+            // 互調班授權邏輯（比照請假代課，只開放調換後的班級，且只限當天）
+            //
+            // 記錄欄位定義：
+            //   teacherA / classA / swapDate  = A老師「原班被調走」的日期（A那天不上自己的班）
+            //   teacherB / classB / swapDateB = B老師「原班被調走」的日期（B那天不上自己的班）
+            //
+            // 實際上課安排：
+            //   A老師 在 swapDateB（B的調課日）去上 classB（B的原班）
+            //   B老師 在 swapDate（A的調課日）去上 classA（A的原班）
+            //
+            // 授權規則：
+            //   A老師在 swapDate     那天：移除 classA（原班不用上），不加任何新班
+            //   A老師在 swapDateB    那天：加入 classB（去上B的班），同時移除 classA（避免A在那天也看到自己原班）
+            //   B老師在 swapDateB    那天：移除 classB（原班不用上），不加任何新班
+            //   B老師在 swapDate     那天：加入 classA（去上A的班），同時移除 classB
+
+            allClassSwapRecords.forEach(r => {
+                const dateA  = normalizeDateStr(r.swapDate);          // A原班被調走的日期
+                const dateB  = normalizeDateStr(r.swapDateB || r.swapDate); // B原班被調走的日期
+                const isA    = cleanStr(r.teacherA) === teacherKey;
+                const isB    = cleanStr(r.teacherB) === teacherKey;
+                const clsA   = r.classA || '';
+                const clsB   = r.classB || '';
+
+                if (isA) {
+                    if (dateKey === dateA) {
+                        // A老師在自己原班被調走的那天：移除原班，無新班（那天不用上課）
+                        classSet.delete(clsA);
+                    }
+                    if (dateKey === dateB) {
+                        // A老師在B的調課日：去上B的班（classB），移除自己原班避免混淆
+                        classSet.delete(clsA);
+                        if (clsB) classSet.add(clsB);
+                    }
+                }
+                if (isB) {
+                    if (dateKey === dateB) {
+                        // B老師在自己原班被調走的那天：移除原班，無新班（那天不用上課）
+                        classSet.delete(clsB);
+                    }
+                    if (dateKey === dateA) {
+                        // B老師在A的調課日：去上A的班（classA），移除自己原班避免混淆
+                        classSet.delete(clsB);
+                        if (clsA) classSet.add(clsA);
+                    }
+                }
+            });
+
+            return [...classSet].filter(Boolean);
+        }
 
         // ===== 公告事項相關函式 =====
 
@@ -1108,50 +1333,102 @@
             const currentTeacher = localStorage.getItem('currentTeacher');
             const isAdmin = cleanStr(currentTeacher) === "管理員";
             const select = document.getElementById('expenseHistorySelect');
-            const adminList = document.getElementById('adminExpenseList');
-            
+
             try {
                 const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'expenseSheets'));
                 allExpenseSheets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                allExpenseSheets.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-
-                let mySheets = isAdmin ? allExpenseSheets : allExpenseSheets.filter(s => cleanStr(s.teacherName) === cleanStr(currentTeacher));
-                
-                select.innerHTML = '<option value="">-- 查看歷史記錄 --</option>';
-                mySheets.forEach((s, idx) => {
-                    // 顯示費用單的年份與月份，而不是建立日期
-                    select.add(new Option(`${s.year}/${s.month} - ${s.className}`, s.id));
+                allExpenseSheets.sort((a, b) => {
+                    if (b.year !== a.year) return b.year - a.year;
+                    if (b.month !== a.month) return b.month - a.month;
+                    return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
                 });
 
-                document.getElementById('expenseHistorySelect').onchange = (e) => {
-                    if (e.target.value) {
-                        viewExpenseSheet(e.target.value);
-                    }
-                };
+                // 個人歷史費用單（老師只看自己的）
+                const mySheets = isAdmin ? [] : allExpenseSheets.filter(s => cleanStr(s.teacherName) === cleanStr(currentTeacher));
+                if (select) {
+                    select.innerHTML = '<option value="">-- 查看我的歷史記錄 --</option>';
+                    mySheets.forEach(s => select.add(new Option(`民國${s.year}年${s.month}月 - ${s.className}`, s.id)));
+                    select.onchange = (e) => { if (e.target.value) viewExpenseSheet(e.target.value); };
+                }
 
+                // 管理員：填入篩選下拉選單
                 if (isAdmin) {
-                    adminList.classList.remove('hidden');
-                    adminList.innerHTML = '<h5 class="text-xs font-bold text-gray-500 mb-2">所有教師費用單 (管理員)</h5>' + 
-                        mySheets.map(s => `
-                            <div class="flex items-center justify-between bg-white p-2 rounded border text-xs shadow-sm">
-                                <div class="flex-1 truncate">
-                                    <span class="font-bold text-indigo-700">${s.teacherName}</span>
-                                    <span class="text-gray-400 ml-2">${s.className} (${s.year}/${s.month})</span>
-                                </div>
-                                <div class="flex gap-2">
-                                    <button onclick="viewExpenseSheet('${s.id}')" class="text-blue-500 hover:text-blue-700 font-bold">查看</button>
-                                    <button onclick="editExpenseSheet('${s.id}')" class="text-green-500 hover:text-green-700 font-bold">修改</button>
-                                    <button onclick="deleteExpenseSheet('${s.id}')" class="text-red-500 hover:text-red-700 font-bold">刪除</button>
-                                </div>
-                            </div>
-                        `).join('');
-                } else {
-                    adminList.classList.add('hidden');
+                    // 月份選單（依年月去重排序）
+                    const monthSel = document.getElementById('adminExpenseMonthFilter');
+                    const teacherSel = document.getElementById('adminExpenseTeacherFilter');
+                    const classSel = document.getElementById('adminExpenseClassFilter');
+                    if (monthSel) {
+                        const months = [...new Set(allExpenseSheets.map(s => `${s.year}-${String(s.month).padStart(2,'0')}`))]
+                            .sort().reverse();
+                        monthSel.innerHTML = '<option value="">-- 所有月份 --</option>';
+                        months.forEach(m => {
+                            const [y, mo] = m.split('-');
+                            monthSel.add(new Option(`民國${y}年${parseInt(mo)}月`, m));
+                        });
+                    }
+                    if (teacherSel) {
+                        const teachers = [...new Set(allExpenseSheets.map(s => s.teacherName || ''))].filter(Boolean).sort();
+                        teacherSel.innerHTML = '<option value="">-- 所有老師 --</option>';
+                        teachers.forEach(t => teacherSel.add(new Option(t, t)));
+                    }
+                    if (classSel) {
+                        const classes = [...new Set(allExpenseSheets.map(s => s.className || ''))].filter(Boolean).sort();
+                        classSel.innerHTML = '<option value="">-- 所有班級 --</option>';
+                        classes.forEach(c => classSel.add(new Option(c, c)));
+                    }
                 }
             } catch (err) {
                 console.error("載入費用單失敗:", err);
             }
         }
+
+        // 管理員費用單查詢表格渲染
+        window.renderAdminExpenseTable = async () => {
+            const tableEl = document.getElementById('adminExpenseTable');
+            const countEl = document.getElementById('adminExpenseCount');
+            if (!tableEl) return;
+
+            // 若資料尚未載入，先重新載入
+            if (allExpenseSheets.length === 0) {
+                tableEl.innerHTML = '<p class="text-gray-400 text-center py-6 animate-pulse">資料載入中...</p>';
+                await loadExpenseSheets();
+            }
+
+            const monthFilter   = document.getElementById('adminExpenseMonthFilter')?.value   || '';
+            const teacherFilter = document.getElementById('adminExpenseTeacherFilter')?.value || '';
+            const classFilter   = document.getElementById('adminExpenseClassFilter')?.value   || '';
+
+            let filtered = [...allExpenseSheets];
+            if (monthFilter) {
+                const [fy, fm] = monthFilter.split('-').map(Number);
+                filtered = filtered.filter(s => Number(s.year) === fy && Number(s.month) === fm);
+            }
+            if (teacherFilter) filtered = filtered.filter(s => cleanStr(s.teacherName) === cleanStr(teacherFilter));
+            if (classFilter)   filtered = filtered.filter(s => cleanStr(s.className)   === cleanStr(classFilter));
+
+            if (filtered.length === 0) {
+                tableEl.innerHTML = '<p class="text-gray-400 text-center py-8">查無符合條件的費用單</p>';
+                if (countEl) countEl.textContent = '';
+                return;
+            }
+
+            tableEl.innerHTML = filtered.map(s => `
+                <div class="flex items-center justify-between bg-white p-3 rounded-xl border border-indigo-100 shadow-sm gap-3">
+                    <div class="flex items-center gap-3 flex-1 min-w-0 flex-wrap">
+                        <span class="font-extrabold text-base text-indigo-700 whitespace-nowrap">民國${s.year}年${s.month}月</span>
+                        <span class="font-bold text-gray-900 whitespace-nowrap">${s.teacherName || '-'}</span>
+                        <span class="text-sm text-gray-600 whitespace-nowrap">${s.className || '-'}</span>
+                        <span class="text-xs text-gray-400">${s.createdAt ? new Date(s.createdAt.seconds*1000).toLocaleDateString('zh-TW') : ''}</span>
+                    </div>
+                    <div class="flex gap-2 shrink-0">
+                        <button onclick="viewExpenseSheet('${s.id}')" class="bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white font-bold px-3 py-1.5 rounded-lg text-sm transition">查看</button>
+                        <button onclick="editExpenseSheet('${s.id}')" class="bg-green-50 text-green-600 hover:bg-green-600 hover:text-white font-bold px-3 py-1.5 rounded-lg text-sm transition">修改</button>
+                        <button onclick="deleteExpenseSheet('${s.id}')" class="bg-red-50 text-red-600 hover:bg-red-600 hover:text-white font-bold px-3 py-1.5 rounded-lg text-sm transition">刪除</button>
+                    </div>
+                </div>
+            `).join('');
+            if (countEl) countEl.textContent = `共 ${filtered.length} 筆`;
+        };
 
         window.viewExpenseSheet = async (id) => {
             const sheet = allExpenseSheets.find(s => s.id === id);
@@ -1214,8 +1491,8 @@
                     3: [1, 7, 8, 14, 15, 21, 22, 28, 29],
                     4: [3, 4, 5, 6, 11, 12, 18, 19, 25, 26],
                     5: [1, 2, 3, 9, 10, 11, 16, 17, 23, 24, 30, 31],
-                    6: [6, 7, 13, 14, 19, 20, 21, 27, 28],
-                    7: [4, 5, 11, 12, 18, 19, 25, 26],
+                    6: [6, 7, 13, 14, 19, 20, 21, 27, 28, 30],
+                    7: [1, 2, 3, 4, 5, 11, 12, 18, 19, 25, 26],
                     8: [1, 2, 8, 9, 15, 16, 22, 23, 29, 30],
                     9: [5, 6, 12, 13, 19, 20, 25, 26, 27],
                     10: [3, 4, 9, 10, 11, 17, 18, 24, 25, 31],
@@ -1275,10 +1552,11 @@
 
         window.toggleDate = (dateStr) => {
             if (!isWorkingDay(dateStr)) {
-                showMessage("此日期為非上班日", "error");
+                showMessage("此日期為非上班日，不可選擇", "error");
                 return;
             }
 
+            // 多選模式 或 預覽多選模式
             // 限制只能選擇同一個月份
             if (selectedDates.length > 0) {
                 const firstDate = new Date(selectedDates[0].replace(/-/g, '/'));
@@ -1556,23 +1834,135 @@
             const teacherName = localStorage.getItem('currentTeacher');
             const className = document.getElementById('expenseClassSelect').value;
             const canvas = document.getElementById('signatureCanvas');
-            
-            if (!className || selectedDates.length === 0) {
-                showMessage('請選擇班級與日期', 'error');
+            const monthVal = document.getElementById('expenseMonthSelect').value; // e.g. "2025-04"
+
+            if (!className || !monthVal) {
+                showMessage('請選擇班級與簽到月份', 'error');
                 return;
             }
 
-            // 整理資料
-            const dates = [...selectedDates].sort();
-            const firstDateStr = dates[0].replace(/-/g, '/');
-            const firstDate = new Date(firstDateStr);
-            const year = firstDate.getFullYear() - 1911; // 民國年
-            const month = firstDate.getMonth() + 1;
+            // 解析月份
+            const [yearFull, monthNum] = monthVal.split('-').map(Number);
+            const year = yearFull - 1911; // 民國年
+            const month = monthNum;
+
+            // 判斷此班是否在老師自己的正式班表中
+            const pairs = getTeacherClassPairs(teacherName);
+            const matched = pairs.filter(p => cleanStr(p.className) === cleanStr(className));
+            const isOwnClass = matched.length > 0;
+
+            // 取出此班的上課星期幾（僅正式班表有效）
+            let scheduledWeekdays = new Set();
+            let defaultTimeSlot = '12:40~18:20';
+            matched.forEach(p => {
+                parseCycleTextToWeekdays(p.cycle || '').forEach(d => scheduledWeekdays.add(d));
+                if (p.timeSlot) defaultTimeSlot = p.timeSlot;
+            });
+
+            let autoSelectedDates = [];
+
+            if (isOwnClass) {
+                // ── 自己的班：依正常週期展開整月上課日 ──
+                const daysInMonth = new Date(yearFull, monthNum, 0).getDate();
+                for (let d = 1; d <= daysInMonth; d++) {
+                    const dateStr = `${yearFull}-${String(monthNum).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                    const dow = new Date(dateStr.replace(/-/g,'/'));
+                    if (!isWorkingDay(dateStr)) continue;
+                    if (scheduledWeekdays.size > 0 && !scheduledWeekdays.has(dow.getDay())) continue;
+                    autoSelectedDates.push(dateStr);
+                }
+            }
+            // ── 不論是否自己的班，加入有記錄的代課日（僅限有記錄的那一天）──
+            allLeaveSubRecords.forEach(r => {
+                if (cleanStr(r.className) !== cleanStr(className)) return;
+                const d = normalizeDateStr(r.leaveDate);
+                if (!d) return;
+                const [dy, dm] = d.split('-').map(Number);
+                if (dy !== yearFull || dm !== monthNum) return;
+                const tryAdd = (targetTeacher, slot) => {
+                    if (!slot || cleanStr(targetTeacher) !== cleanStr(teacherName)) return;
+                    // 若是自己的班：這天已在週期日中，不重複加；
+                    // 若是代課班：只加這一天（精確代課日）
+                    if (!autoSelectedDates.includes(d)) autoSelectedDates.push(d);
+                };
+                tryAdd(r.subTeacherA, r.subTimeA);
+                tryAdd(r.subTeacherB, r.subTimeB);
+            });
+
+            // ── 互調班處理（核心邏輯）──
+            // 例：A老師4/23的1A ⇄ B老師4/24的1B
+            // ┌ 對A老師查詢1A班：
+            //   ① 移除 4/23（A的原班日，改由B上）
+            //   ② 不在此加 B班日期（B班 1B 要另選班級計算）
+            // ┌ 對A老師查詢1B班（互調後的班）：
+            //   ① 加入 4/24（B的調課日，由A去上）
+            // ┌ 對B老師查詢1B班：
+            //   ① 移除 4/24
+            // ┌ 對B老師查詢1A班：
+            //   ① 加入 4/23
+            allClassSwapRecords.forEach(r => {
+                const dA = normalizeDateStr(r.swapDate);
+                const dB = normalizeDateStr(r.swapDateB || r.swapDate);
+                const tA = cleanStr(r.teacherA), tB = cleanStr(r.teacherB);
+                const cA = cleanStr(r.classA  || ''), cB = cleanStr(r.classB   || '');
+                const myCls = cleanStr(className);
+                const myT   = cleanStr(teacherName);
+
+                // A老師查自己原班(classA)：移除 swapDate 那天
+                if (myT === tA && myCls === cA && dA) {
+                    const [dy, dm] = dA.split('-').map(Number);
+                    if (dy === yearFull && dm === monthNum) {
+                        const idx = autoSelectedDates.indexOf(dA);
+                        if (idx > -1) autoSelectedDates.splice(idx, 1);
+                    }
+                }
+                // B老師查自己原班(classB)：移除 swapDateB 那天
+                if (myT === tB && myCls === cB && dB) {
+                    const [dy, dm] = dB.split('-').map(Number);
+                    if (dy === yearFull && dm === monthNum) {
+                        const idx = autoSelectedDates.indexOf(dB);
+                        if (idx > -1) autoSelectedDates.splice(idx, 1);
+                    }
+                }
+                // A老師查B的班(classB)：加入 swapDateB（A去上B班那天）
+                if (myT === tA && myCls === cB && dB) {
+                    const [dy, dm] = dB.split('-').map(Number);
+                    if (dy === yearFull && dm === monthNum && !autoSelectedDates.includes(dB))
+                        autoSelectedDates.push(dB);
+                }
+                // B老師查A的班(classA)：加入 swapDate（B去上A班那天）
+                if (myT === tB && myCls === cA && dA) {
+                    const [dy, dm] = dA.split('-').map(Number);
+                    if (dy === yearFull && dm === monthNum && !autoSelectedDates.includes(dA))
+                        autoSelectedDates.push(dA);
+                }
+            });
+
+            autoSelectedDates.sort();
+
+            // 六年級畢業班停課截斷
+            let grade6Truncated = false;
+            let grade6StopDate = '';
+            if (isGrade6Class(className) && window._grade6StopDate) {
+                const before = autoSelectedDates.length;
+                autoSelectedDates = autoSelectedDates.filter(d => !isAfterGrade6Stop(d));
+                if (autoSelectedDates.length < before) {
+                    grade6Truncated = true;
+                    grade6StopDate = window._grade6StopDate;
+                }
+            }
+
+            if (autoSelectedDates.length === 0) {
+                showMessage('本月份找不到此班的上課日，請確認班表設定', 'error');
+                return;
+            }
+
+            // 更新 selectedDates 供查重等邏輯使用
+            selectedDates = autoSelectedDates;
 
             // 查重邏輯
             if (!skipCheck) {
                 try {
-                    // 強制重新抓取資料庫，確保數據最新
                     const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'expenseSheets'));
                     allExpenseSheets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                     
@@ -1586,11 +1976,7 @@
                         const dbClass = (s.className || "").toString().trim();
                         const dbYear = Number(s.year);
                         const dbMonth = Number(s.month);
-
-                        return dbTeacher === targetTeacher && 
-                               dbClass === targetClass && 
-                               dbYear === targetYear && 
-                               dbMonth === targetMonth;
+                        return dbTeacher === targetTeacher && dbClass === targetClass && dbYear === targetYear && dbMonth === targetMonth;
                     });
 
                     if (duplicate) {
@@ -1610,45 +1996,102 @@
                 return;
             }
 
-            // sigPaths 有兩種可能格式：
-            //   A) 字串陣列 ["x,y;x,y;..."] → 已是新格式，直接使用
-            //   B) 物件陣列 [[{x,y},...]]   → 老師剛簽名尚未上傳，需先壓縮轉換
-            //   C) 空陣列 / null             → 退回 Base64
             let currentSigPaths = null;
             if (sigPaths && sigPaths.length > 0) {
                 if (typeof sigPaths[0] === 'string') {
-                    // A) 已是字串格式，直接用
                     currentSigPaths = sigPaths;
                 } else {
-                    // B) 物件格式，壓縮並轉換為字串格式
                     currentSigPaths = compressPaths(sigPaths, 1.5);
                 }
             }
-            // C) currentSigPaths 為 null 時，退回 Base64（相容舊格式）
             const signatureData = (currentSigPaths && currentSigPaths.length > 0) ? null : canvas.toDataURL();
 
+            const dates = [...autoSelectedDates];
+
+            // 依各日期的班表及調課記錄計算到勤時間
             const items = dates.map(d => {
-                const dateObj = new Date(d.replace(/-/g, '/'));
-                // 這裡根據班級與日期動態決定到勤時間
                 const dynamicArrival = getDefaultArrivalTime(className, d);
-                const dynamicDeparture = "18:20"; // 預設退勤為 18:20
-                
-                return {
-                    date: d,
-                    arrival: dynamicArrival,
-                    departure: dynamicDeparture,
-                    sessions: calculateSessions(dynamicArrival, dynamicDeparture)
-                };
+                const dynamicDeparture = "18:20";
+                return { date: d, arrival: dynamicArrival, departure: dynamicDeparture, sessions: calculateSessions(dynamicArrival, dynamicDeparture) };
             });
+
+            // 請假老師扣除時段
+            const normalizedItems = [...items];
+            const existingKey = new Set(items.map(i => `${i.date}_${i.arrival}_${i.departure}`));
+
+            allLeaveSubRecords.forEach(r => {
+                if (cleanStr(r.leaveTeacher) !== cleanStr(teacherName)) return;
+                if (cleanStr(r.className) !== cleanStr(className)) return;
+                const d = normalizeDateStr(r.leaveDate);
+                normalizedItems.forEach(i => {
+                    if (i.date !== d) return;
+                    const leaveSlot = r.leaveTime || '';
+                    if (leaveSlot === "12:40~18:20") { i.arrival = "12:40"; i.departure = "12:40"; }
+                    else if (leaveSlot === "12:40~16:00" && i.arrival === "12:40" && i.departure === "18:20") { i.arrival = "16:00"; i.departure = "18:20"; }
+                    else if (leaveSlot === "16:00~18:20" && i.arrival === "12:40" && i.departure === "18:20") { i.arrival = "12:40"; i.departure = "16:00"; }
+                    else if (leaveSlot === `${i.arrival}~${i.departure}`) { i.arrival = "12:40"; i.departure = "12:40"; }
+                    i.sessions = calculateSessions(i.arrival, i.departure);
+                });
+            });
+
+            // 代課老師增加時段（A/B）
+            allLeaveSubRecords.forEach(r => {
+                if (cleanStr(r.className) !== cleanStr(className)) return;
+                const d = normalizeDateStr(r.leaveDate);
+                const tryPush = (targetTeacher, slot) => {
+                    if (!slot || cleanStr(targetTeacher) !== cleanStr(teacherName)) return;
+                    const [arrival, departure] = slot.split('~');
+                    if (!arrival || !departure) return;
+                    const k = `${d}_${arrival}_${departure}`;
+                    if (existingKey.has(k)) return;
+                    existingKey.add(k);
+                    normalizedItems.push({ date: d, arrival, departure, sessions: calculateSessions(arrival, departure) });
+                };
+                tryPush(r.subTeacherA, r.subTimeA);
+                tryPush(r.subTeacherB, r.subTimeB);
+            });
+
+            // 互調班到勤時間修正：依互調後的上課班級設定正確時間段
+            allClassSwapRecords.forEach(r => {
+                const dA = normalizeDateStr(r.swapDate);
+                const dB = normalizeDateStr(r.swapDateB || r.swapDate);
+                const tA = cleanStr(r.teacherA), tB = cleanStr(r.teacherB);
+                const cA = cleanStr(r.classA || ''), cB = cleanStr(r.classB || '');
+                const myCls = cleanStr(className);
+                const myT   = cleanStr(teacherName);
+
+                // A老師去上B班(classB)，在 dB 這天，使用 timeA（A當天的上課時間段）
+                if (myT === tA && myCls === cB && r.timeA && dB) {
+                    const [arr, dep] = r.timeA.split('~');
+                    normalizedItems.forEach(i => {
+                        if (i.date !== dB) return;
+                        if (arr && dep) { i.arrival = arr; i.departure = dep; i.sessions = calculateSessions(arr, dep); }
+                    });
+                }
+                // B老師去上A班(classA)，在 dA 這天，使用 timeB
+                if (myT === tB && myCls === cA && r.timeB && dA) {
+                    const [arr, dep] = r.timeB.split('~');
+                    normalizedItems.forEach(i => {
+                        if (i.date !== dA) return;
+                        if (arr && dep) { i.arrival = arr; i.departure = dep; i.sessions = calculateSessions(arr, dep); }
+                    });
+                }
+            });
+
+            const finalItems = normalizedItems
+                .filter(i => i.arrival !== i.departure)
+                .sort((a, b) => a.date.localeCompare(b.date));
 
             currentPreviewData = {
                 teacherName,
                 className,
                 year,
                 month,
-                items,
-                signature: signatureData, // 僅在無 paths 時有值（相容舊資料）
-                sigPaths: currentSigPaths  // 優先存座標路徑（JSON 格式）
+                items: finalItems,
+                signature: signatureData,
+                sigPaths: currentSigPaths,
+                grade6Truncated,
+                grade6StopDate
             };
 
             renderExpensePreview(currentPreviewData);
@@ -1710,6 +2153,23 @@
 
         function renderExpensePreview(data, viewOnly = false) {
             const modal = document.getElementById('expensePreviewModal');
+
+            // 六年級畢業班警示橫幅
+            const existingBanner = document.getElementById('grade6WarningBanner');
+            if (existingBanner) existingBanner.remove();
+            if (data.grade6Truncated && data.grade6StopDate) {
+                const banner = document.createElement('div');
+                banner.id = 'grade6WarningBanner';
+                banner.className = 'fixed top-0 left-0 right-0 z-[9999] bg-red-600 text-white text-center py-3 px-4 shadow-2xl';
+                banner.innerHTML = `
+                    <div class="flex items-center justify-center gap-3 flex-wrap">
+                        <span class="text-2xl">🎓⚠️</span>
+                        <span class="font-black text-lg">六年級畢業班停課提醒</span>
+                        <span class="font-bold">此班最後上課日為 <u>${data.grade6StopDate}</u>，之後的日期已自動排除，請確認日期是否正確後再送出！</span>
+                        <button onclick="document.getElementById('grade6WarningBanner').remove()" class="ml-4 bg-white text-red-700 font-black px-3 py-1 rounded-lg text-sm hover:bg-red-100">我已知曉 ✕</button>
+                    </div>`;
+                document.body.prepend(banner);
+            }
             
             // 優化：如果沒有 Base64 但有路徑資料，先在隱藏 canvas 上繪製並生成 Base64 (僅供顯示)
             if (!data.signature && data.sigPaths && data.sigPaths.length > 0) {
@@ -1809,7 +2269,7 @@
                         <span>預覽與修改資料 (下方表格將同步更新)</span>
                         <span class="text-xs text-gray-400">若日期過多可於此區域內捲動</span>
                     </h4>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-32 overflow-y-auto p-1">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-32 overflow-y-auto p-1 mb-3">
                         ${data.items.map((item, idx) => `
                             <div class="flex items-center gap-2 bg-gray-50 p-1.5 rounded border text-[11px]">
                                 <span class="font-bold w-16">${item.date.split('-').slice(1).join('/')}</span>
@@ -1826,6 +2286,16 @@
                             </div>
                         `).join('')}
                     </div>
+                    <!-- 新增日期區塊（管理員修改用）-->
+                    <div class="border-t border-indigo-100 pt-3">
+                        <p class="text-xs font-bold text-indigo-600 mb-2">➕ 批次新增/移除日期</p>
+                        <div class="flex flex-wrap gap-2 items-center">
+                            <button onclick="openAddItemCalendar()" class="flex items-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm font-bold shadow transition-all active:scale-95">
+                                <span class="text-lg">📅</span>
+                                <span id="addItemDateLabel">開啟日曆批次選擇</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             `;
 
@@ -1837,7 +2307,7 @@
                     <div class="flex gap-4 mb-3 no-print">
                         <button onclick="document.getElementById('expensePreviewModal').classList.add('hidden')" class="px-6 py-2 bg-gray-200 text-gray-700 rounded-xl font-bold hover:bg-gray-300 shadow">取消</button>
                         ${!viewOnly ? `<button id="btnConfirmExpense" class="px-6 py-2 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 shadow-lg">確認生成</button>` : ''}
-                        <button onclick="window.print()" class="px-6 py-2 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 shadow-lg">下載</button>
+                        <button onclick="downloadExpensePDF()" class="px-6 py-2 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 shadow-lg">📥 下載 PDF</button>
                     </div>
                     ${editHtml}
                     <div class="a4-scroll-area flex items-start justify-center">
@@ -1986,12 +2456,257 @@
             }
         }
 
-        window.updatePreviewItem = (idx, field, value) => {
-            if (!currentPreviewData) return;
-            currentPreviewData.items[idx][field] = value;
-            currentPreviewData.items[idx].sessions = calculateSessions(currentPreviewData.items[idx].arrival, currentPreviewData.items[idx].departure);
-            renderExpensePreview(currentPreviewData);
+        // ===== 下載簽到費用單為 PDF =====
+        // ===== 下載簽到費用單為 PDF（開新視窗列印）=====
+        window.downloadExpensePDF = function() {
+            if (!currentPreviewData) {
+                showMessage('沒有可下載的費用單資料', 'error');
+                return;
+            }
+
+            const container = document.getElementById('a4PreviewContainer');
+            if (!container) {
+                showMessage('找不到費用單預覽區域', 'error');
+                return;
+            }
+
+            const data = currentPreviewData;
+            const fileName = `民國${data.year}年${data.month}月_${data.teacherName}_${data.className}_教師簽到單`;
+
+            // 完整複製目前頁面所有 <style> 標籤內容
+            const allStyles = Array.from(document.querySelectorAll('style'))
+                .map(s => s.outerHTML).join('\n');
+
+            // 複製所有外部 CSS <link> 標籤
+            const allLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+                .map(l => l.outerHTML).join('\n');
+
+            // 取得 A4 容器 HTML（含簽名 Base64 圖片）
+            // 先暫時把 transform 移除，讓 container 回到實際大小
+            const originalTransform = container.style.transform;
+            container.style.transform = 'none';
+            const contentHtml = container.outerHTML;
+            container.style.transform = originalTransform;
+
+            // 開啟列印視窗
+            const printWin = window.open('', '_blank', 'width=900,height=750');
+            if (!printWin) {
+                showMessage('請允許瀏覽器開啟彈出視窗後再試', 'error');
+                return;
+            }
+
+            printWin.document.write(`<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${fileName}</title>
+<script src="https://cdn.tailwindcss.com"><\/script>
+${allLinks}
+${allStyles}
+<style>
+/* 列印視窗專用：隱藏所有非 A4 元素，只保留費用單 */
+html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    width: 210mm !important;
+    height: 297mm !important;
+    overflow: hidden !important;
+    font-family: "標楷體", "DFKai-SB", serif !important;
+}
+/* 讓 A4 容器貼齊頁面左上角，還原所有縮放 */
+#a4PreviewContainer {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    transform: none !important;
+    zoom: 1 !important;
+    width: 210mm !important;
+    height: 297mm !important;
+    padding: 10mm 15mm 10mm 20mm !important;
+    box-sizing: border-box !important;
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+    background: white !important;
+    color: black !important;
+}
+@page {
+    size: A4 portrait;
+    margin: 0mm;
+}
+@media print {
+    html, body {
+        width: 210mm !important;
+        height: 297mm !important;
+        overflow: hidden !important;
+    }
+    #a4PreviewContainer {
+        page-break-after: avoid !important;
+        page-break-inside: avoid !important;
+    }
+}
+</style>
+</head>
+<body>
+${contentHtml}
+<script>
+window.addEventListener('load', function() {
+    // 等待 Tailwind 套用樣式（CDN 版需要約 500ms 初始化）
+    setTimeout(function() {
+        var imgs = document.querySelectorAll('img');
+        var total = imgs.length;
+        if (total === 0) {
+            setTimeout(function() { window.print(); window.close(); }, 200);
+            return;
+        }
+        var loaded = 0;
+        function checkDone() {
+            loaded++;
+            if (loaded >= total) {
+                setTimeout(function() { window.print(); window.close(); }, 200);
+            }
+        }
+        imgs.forEach(function(img) {
+            if (img.complete) { checkDone(); }
+            else { img.onload = checkDone; img.onerror = checkDone; }
+        });
+    }, 800);
+});
+<\/script>
+</body>
+</html>`);
+            printWin.document.close();
+            showMessage('請在列印對話框中選擇「另存為 PDF」即可下載');
         };
+
+        // ===== 下載簽到費用單為 Excel =====
+        window.downloadExpenseExcel = function() {
+            if (!currentPreviewData) {
+                showMessage('沒有可下載的費用單資料', 'error');
+                return;
+            }
+
+            const data = currentPreviewData;
+
+            // 整理展開的日期資料（與 renderExpensePreview 相同邏輯）
+            const expandedItems = [];
+            data.items.forEach(item => {
+                if (item.arrival === "12:40" && item.departure === "18:20") {
+                    expandedItems.push({ date: item.date, arrival: "12:40", departure: "16:00", type: 4 });
+                    expandedItems.push({ date: item.date, arrival: "16:00", departure: "18:20", type: 3 });
+                } else {
+                    const type = (item.arrival === "12:40" && item.departure === "16:00") ? 4 :
+                                 (item.arrival === "16:00" && item.departure === "18:20") ? 3 : 0;
+                    expandedItems.push({ date: item.date, arrival: item.arrival, departure: item.departure, type: type });
+                }
+            });
+
+            const total4 = expandedItems.filter(i => i.type === 4).length;
+            const total3 = expandedItems.filter(i => i.type === 3).length;
+            const amount4 = total4 * 4 * 336;
+            const amount3 = total3 * 3 * 400;
+            const totalAmount = amount4 + amount3;
+
+            const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+            const getWD = d => weekdays[new Date(d.replace(/-/g, '/')).getDay()];
+
+            // ── 建立工作表資料（二維陣列）──
+            const ws_data = [];
+
+            // 第1行：標題
+            ws_data.push(['新北市汐止區長安國民小學 課後活動班 教師簽到單']);
+
+            // 第2行：年月、老師、班級（分散到不同欄）
+            ws_data.push([
+                `民國 ${data.year} 年 ${data.month} 月`,
+                '', '', '', '',
+                `老師姓名：${data.teacherName}`,
+                '', '', '', '',
+                `上課班級：${data.className}`
+            ]);
+            ws_data.push([]); // 空行
+
+            // 表頭
+            const maxCols = Math.min(expandedItems.length, 30);
+            const colHeaders = expandedItems.slice(0, maxCols).map((_, i) => `第${i + 1}次`);
+            ws_data.push(['項目', ...colHeaders]);
+
+            // 授課節數
+            ws_data.push(['授課節數', ...expandedItems.slice(0, maxCols).map(c => `${c.type} 節`)]);
+
+            // 到勤日
+            ws_data.push(['到勤日', ...expandedItems.slice(0, maxCols).map(c => {
+                const parts = c.date.split('-');
+                return `${parts[1]}/${parts[2]}(${getWD(c.date)})`;
+            })]);
+
+            // 到勤時間
+            ws_data.push(['到勤時間', ...expandedItems.slice(0, maxCols).map(c => c.arrival)]);
+
+            // 到勤簽到（Excel 無法嵌入圖片，以老師姓名代表）
+            ws_data.push(['到勤簽到', ...expandedItems.slice(0, maxCols).map(() => data.teacherName)]);
+
+            // 退勤時間
+            ws_data.push(['退勤時間', ...expandedItems.slice(0, maxCols).map(c => c.departure)]);
+
+            // 退勤簽到
+            ws_data.push(['退勤簽到', ...expandedItems.slice(0, maxCols).map(() => data.teacherName)]);
+
+            ws_data.push([]); // 空行
+
+            // 合計節數
+            ws_data.push([
+                '合計節數',
+                `4節 × ${total4} 天 = ${total4 * 4} 節`,
+                '', '', '', '',
+                `3節 × ${total3} 天 = ${total3 * 3} 節`
+            ]);
+
+            // 鐘點費
+            ws_data.push([
+                '鐘點費',
+                `336元 × ${total4 * 4} 節 = ${amount4} 元`,
+                '', '', '', '',
+                `400元 × ${total3 * 3} 節 = ${amount3} 元`
+            ]);
+
+            // 合計總額
+            ws_data.push(['合計總額', `新台幣：${numberToChinese(totalAmount)}（${totalAmount} 元）`]);
+
+            ws_data.push([]); // 空行
+            ws_data.push(['承辦人簽章：', '', '', '', '', '主管簽章：']);
+
+            // ── 建立 Workbook ──
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.aoa_to_sheet(ws_data);
+
+            // 欄寬設定
+            ws['!cols'] = [
+                { wch: 12 },
+                ...Array(Math.max(maxCols, 10)).fill({ wch: 11 })
+            ];
+
+            // 合併儲存格
+            const lastCol = Math.max(maxCols, 10);
+            ws['!merges'] = [
+                { s: { r: 0, c: 0 }, e: { r: 0, c: lastCol } },   // 標題列
+                { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } },          // 年月
+                { s: { r: 1, c: 5 }, e: { r: 1, c: 9 } },          // 老師姓名
+                { s: { r: 1, c: 10 }, e: { r: 1, c: lastCol } },    // 班級
+            ];
+
+            XLSX.utils.book_append_sheet(wb, ws, '教師簽到單');
+
+            // 檔名：民國年月_老師_班級
+            const fileName = `民國${data.year}年${data.month}月_${data.teacherName}_${data.className}_教師簽到單.xlsx`;
+            XLSX.writeFile(wb, fileName);
+            showMessage(`已下載：${fileName}`);
+        };
+
+
 
         async function saveExpenseSheet() {
             if (!auth.currentUser || !currentPreviewData) return;
@@ -2039,7 +2754,7 @@
                 // 清除已選擇的日期，方便下次選擇
                 selectedDates = [];
                 const dateText = document.getElementById('selectedDatesText');
-                if (dateText) dateText.innerText = '尚未選擇日期';
+                if (dateText) dateText.innerText = '';
                 
                 await loadExpenseSheets();
             } catch (err) {
@@ -2048,6 +2763,483 @@
             } finally {
                 btn.innerText = originalText;
                 btn.disabled = false;
+            }
+        }
+
+        async function loadLeaveAndSwapRecords() {
+            const leaveSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'leaveSubstitutions'));
+            allLeaveSubRecords = leaveSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+            allLeaveSubRecords.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+
+            const swapSnap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'classSwaps'));
+            allClassSwapRecords = swapSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+            allClassSwapRecords.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+
+            // 同步載入六年級停課設定（所有使用者皆需要）
+            try {
+                const g6snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sysConfig', 'grade6'));
+                if (g6snap.exists()) {
+                    const d = g6snap.data();
+                    window._grade6StopDate = d.stopDate || '';
+                    window._grade6Keywords = (d.keywords || '六年,6年').split(',').map(k => k.trim()).filter(Boolean);
+                }
+            } catch(e) { /* 靜默失敗 */ }
+        }
+
+        // 判斷班級是否為六年級畢業班
+        function isGrade6Class(className) {
+            const kws = window._grade6Keywords || ['六年','6年'];
+            return kws.some(k => k && className.includes(k));
+        }
+
+        // 判斷某日期是否超過六年級停課日（含當天視為有效，隔天起截止）
+        function isAfterGrade6Stop(dateStr) {
+            const stop = window._grade6StopDate || '';
+            if (!stop) return false;
+            return dateStr > stop; // 字串比較 YYYY-MM-DD 格式可直接比
+        }
+
+        function renderLeaveSubList() {
+            const area = document.getElementById('leaveSubListArea');
+            if (!area) return;
+            if (allLeaveSubRecords.length === 0) {
+                area.innerHTML = '<p class="text-gray-400 text-center py-4">尚無請假/代課記錄</p>';
+                return;
+            }
+            area.innerHTML = allLeaveSubRecords.slice(0, 60).map(r => `
+                <div class="p-3 border-b border-gray-200 flex items-start justify-between gap-2">
+                    <div class="flex-1 min-w-0">
+                        <div class="font-extrabold text-base text-rose-700">${r.leaveDate || ''}｜${r.className || ''}</div>
+                        <div class="font-bold text-sm text-gray-900 mt-0.5">請假：${r.leaveTeacher || ''}（${r.leaveTime || ''}）</div>
+                        <div class="font-semibold text-sm text-gray-800">A 代課：${r.subTeacherA || '-'}（${r.subTimeA || '-'}）｜B 代課：${r.subTeacherB || '-'}（${r.subTimeB || '-'}）</div>
+                    </div>
+                    <button onclick="deleteLeaveRecord('${r.id}')" class="shrink-0 w-7 h-7 flex items-center justify-center rounded-full bg-rose-100 text-rose-600 hover:bg-rose-600 hover:text-white font-bold text-sm transition" title="刪除此筆記錄">✕</button>
+                </div>
+            `).join('');
+        }
+
+        window.deleteLeaveRecord = async (id) => {
+            if (!confirm('確定要刪除此請假/代課記錄嗎？')) return;
+            try {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'leaveSubstitutions', id));
+                await loadLeaveAndSwapRecords();
+                renderLeaveSubList();
+                showMessage('請假/代課記錄已刪除');
+            } catch (err) {
+                console.error(err);
+                showMessage('刪除失敗', 'error');
+            }
+        };
+
+        function renderSwapList() {
+            const area = document.getElementById('swapListArea');
+            if (!area) return;
+            if (allClassSwapRecords.length === 0) {
+                area.innerHTML = '<p class="text-gray-400 text-center py-4">尚無互調班記錄</p>';
+                return;
+            }
+            area.innerHTML = allClassSwapRecords.slice(0, 60).map(r => `
+                <div class="p-3 border-b border-gray-200 flex items-start justify-between gap-2">
+                    <div class="flex-1 min-w-0">
+                        <div class="font-extrabold text-base text-cyan-700">A 調課日期：${r.swapDate || ''} ｜ B 調課日期：${r.swapDateB || r.swapDate || ''}</div>
+                        <div class="font-bold text-sm text-gray-900 mt-0.5">${r.teacherA || ''}：${r.classA || ''}（${r.timeA || ''}） ⇄ ${r.teacherB || ''}：${r.classB || ''}（${r.timeB || ''}）</div>
+                    </div>
+                    <button onclick="deleteSwapRecord('${r.id}')" class="shrink-0 w-7 h-7 flex items-center justify-center rounded-full bg-cyan-100 text-cyan-600 hover:bg-cyan-600 hover:text-white font-bold text-sm transition" title="刪除此筆記錄">✕</button>
+                </div>
+            `).join('');
+        }
+
+        window.deleteSwapRecord = async (id) => {
+            if (!confirm('確定要刪除此互調班記錄嗎？')) return;
+            try {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'classSwaps', id));
+                await loadLeaveAndSwapRecords();
+                renderSwapList();
+                showMessage('互調班記錄已刪除');
+            } catch (err) {
+                console.error(err);
+                showMessage('刪除失敗', 'error');
+            }
+        };
+
+        async function saveLeaveSubRecord() {
+            const leaveTeacher = document.getElementById('leaveTeacherSelect').value;
+            const className = document.getElementById('leaveClassSelect').value;
+            const leaveDate = document.getElementById('leaveDateInput').value;
+            const leaveTime = document.getElementById('leaveTimeSelect').value;
+            const subTeacherA = document.getElementById('subTeacherASelect').value;
+            const subTimeA = document.getElementById('subTimeASelect').value;
+            const subTeacherB = document.getElementById('subTeacherBSelect').value;
+            const subTimeB = document.getElementById('subTimeBSelect').value;
+
+            if (!leaveTeacher || !className || !leaveDate || !leaveTime) {
+                showMessage('請完整填寫請假老師、班級、日期與時間段', 'error');
+                return;
+            }
+            if (!subTimeA && !subTimeB) {
+                showMessage('請至少指定一位代課老師的上課時間段', 'error');
+                return;
+            }
+
+            // 防呆：同一老師同一天是否已有請假或調班記錄
+            const leaveDateNorm = normalizeDateStr(leaveDate);
+            const leaveTeacherKey = cleanStr(leaveTeacher);
+            const leaveDate_obj = new Date(leaveDate.replace(/-/g, '/'));
+            const leaveDow = leaveDate_obj.getDay(); // 0=日..6=六
+
+            // 1. 請假老師當天重複/衝突檢查
+            const dupLeaveRec = allLeaveSubRecords.find(r =>
+                cleanStr(r.leaveTeacher) === leaveTeacherKey &&
+                normalizeDateStr(r.leaveDate) === leaveDateNorm
+            );
+            if (dupLeaveRec) {
+                showMessage(`⚠️ 老師「${leaveTeacher}」在同一天已有請假記錄，請確認！`, 'error');
+                return;
+            }
+
+            // 調班記錄分兩種情況：
+            // ① 「調出日」= 那天原班已換給對方，本人根本沒課 → 不需請假，給予提示
+            // ② 「調入日」= 那天要去上對方的班，才是真正有課 → 才算調班衝突
+            for (const r of allClassSwapRecords) {
+                const isTeacherA = cleanStr(r.teacherA) === leaveTeacherKey;
+                const isTeacherB = cleanStr(r.teacherB) === leaveTeacherKey;
+                if (!isTeacherA && !isTeacherB) continue;
+
+                // 調出日：A老師的 swapDate / B老師的 swapDateB
+                const swapOutDate = isTeacherA
+                    ? normalizeDateStr(r.swapDate)
+                    : normalizeDateStr(r.swapDateB || r.swapDate);
+                // 調入日：A老師的 swapDateB（去上B班那天）/ B老師的 swapDate（去上A班那天）
+                const swapInDate = isTeacherA
+                    ? normalizeDateStr(r.swapDateB || r.swapDate)
+                    : normalizeDateStr(r.swapDate);
+
+                if (swapOutDate === leaveDateNorm) {
+                    // 調出日請假 → 本日課已調走，根本不用上課，不需請假
+                    showMessage(`⚠️ 老師「${leaveTeacher}」本日已調換班，本來就不用上課，所以不用請假！`, 'error');
+                    return;
+                }
+                if (swapInDate === leaveDateNorm) {
+                    // 調入日請假 → 那天要去上對方的班，這才算真正的衝突
+                    showMessage(`⚠️ 老師「${leaveTeacher}」在同一天已有調班記錄（需去代上對方班級），請確認！`, 'error');
+                    return;
+                }
+            }
+
+            // 2. 代課老師衝突檢查（該老師當天班表與代課時間段是否重疊）
+            const checkSubTeacherConflict = (subTeacher, subTime) => {
+                if (!subTeacher || !subTime) return null;
+                const subKey = cleanStr(subTeacher);
+
+                // 2a. 代課老師當天是否已有請假/調班記錄
+                const dupSubLeave = allLeaveSubRecords.find(r =>
+                    cleanStr(r.leaveTeacher) === subKey &&
+                    normalizeDateStr(r.leaveDate) === leaveDateNorm
+                );
+                if (dupSubLeave) return `⚠️ 代課老師「${subTeacher}」在同一天已有請假記錄，請確認！`;
+
+                const dupSubSwap = allClassSwapRecords.find(r =>
+                    (cleanStr(r.teacherA) === subKey && normalizeDateStr(r.swapDate) === leaveDateNorm) ||
+                    (cleanStr(r.teacherB) === subKey && normalizeDateStr(r.swapDateB || r.swapDate) === leaveDateNorm)
+                );
+                if (dupSubSwap) return `⚠️ 代課老師「${subTeacher}」在同一天已有調班記錄，請確認！`;
+
+                // 2b. 代課老師當天是否有正常班表且時間段衝突
+                const pairs = getTeacherClassPairs(subTeacher);
+                const sameDayPairs = pairs.filter(p =>
+                    parseCycleTextToWeekdays(p.cycle || '').includes(leaveDow)
+                );
+                // 全天請假（12:40~18:20）：班表有任何一段（全天/上半/下半）都算衝突
+                const FULL_DAY   = '12:40~18:20';
+                const MORNING    = '12:40~16:00';
+                const AFTERNOON  = '16:00~18:20';
+                const fullDaySlots = new Set([FULL_DAY, MORNING, AFTERNOON]);
+
+                for (const p of sameDayPairs) {
+                    const schedSlot = (p.timeSlot || '').trim();
+                    if (!schedSlot) continue;
+                    let isConflict = false;
+                    if (leaveTime === FULL_DAY) {
+                        // 請假全天：班表只要有 12:40~18:20、12:40~16:00、16:00~18:20 都衝突
+                        isConflict = fullDaySlots.has(schedSlot);
+                    } else {
+                        // 其他請假時段：只有完全相同才衝突
+                        isConflict = (schedSlot === subTime);
+                    }
+                    if (isConflict) {
+                        return `⚠️ 代課老師「${subTeacher}」已有安排上課班級（${p.className}），請確認！`;
+                    }
+                }
+                return null;
+            };
+
+            const conflictA = checkSubTeacherConflict(subTeacherA, subTimeA);
+            if (conflictA) { showMessage(conflictA, 'error'); return; }
+            const conflictB = checkSubTeacherConflict(subTeacherB, subTimeB);
+            if (conflictB) { showMessage(conflictB, 'error'); return; }
+
+            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'leaveSubstitutions'), {
+                leaveTeacher,
+                className,
+                leaveDate,
+                leaveTime,
+                subTeacherA: subTeacherA || '',
+                subTimeA: subTimeA || '',
+                subTeacherB: subTeacherB || '',
+                subTimeB: subTimeB || '',
+                createdAt: serverTimestamp(),
+                createdBy: localStorage.getItem('currentTeacher') || ''
+            });
+            await loadLeaveAndSwapRecords();
+            renderLeaveSubList();
+            showMessage('請假/代課記錄已儲存');
+            refreshClassDropdowns(localStorage.getItem('currentTeacher') || '');
+        }
+
+        async function saveClassSwapRecord() {
+            const swapDate = document.getElementById('swapDateInput').value;
+            const swapDateB = document.getElementById('swapDateBInput').value;
+            const teacherA = document.getElementById('swapTeacherASelect').value;
+            const classA = document.getElementById('swapClassASelect').value;
+            const timeA = document.getElementById('swapTimeASelect').value;
+            const teacherB = document.getElementById('swapTeacherBSelect').value;
+            const classB = document.getElementById('swapClassBSelect').value;
+            const timeB = document.getElementById('swapTimeBSelect').value;
+
+            if (!swapDate || !swapDateB || !teacherA || !classA || !timeA || !teacherB || !classB || !timeB) {
+                showMessage('請完整填寫互調班資料（含 A/B 調課日期）', 'error');
+                return;
+            }
+            if (cleanStr(teacherA) === cleanStr(teacherB)) {
+                showMessage('互調班需為兩位不同老師', 'error');
+                return;
+            }
+
+            // 防呆：同一老師同一天是否已有請假或調班記錄
+            const swapDateNormA = normalizeDateStr(swapDate);
+            const swapDateNormB = normalizeDateStr(swapDateB);
+            const teacherAKey = cleanStr(teacherA);
+            const teacherBKey = cleanStr(teacherB);
+
+            const checkTeacherDay = (teacherKey, dateNorm, label) => {
+                const hasLeave = allLeaveSubRecords.some(r =>
+                    cleanStr(r.leaveTeacher) === teacherKey &&
+                    normalizeDateStr(r.leaveDate) === dateNorm
+                );
+                const hasSwap = allClassSwapRecords.some(r =>
+                    (cleanStr(r.teacherA) === teacherKey && normalizeDateStr(r.swapDate) === dateNorm) ||
+                    (cleanStr(r.teacherB) === teacherKey && normalizeDateStr(r.swapDateB || r.swapDate) === dateNorm)
+                );
+                if (hasLeave || hasSwap) {
+                    showMessage(`⚠️ ${label} 在同一天已有請假或調班記錄，請確認！`, 'error');
+                    return true;
+                }
+                return false;
+            };
+
+            if (checkTeacherDay(teacherAKey, swapDateNormA, `老師 A（${teacherA}）`)) return;
+            if (checkTeacherDay(teacherBKey, swapDateNormB, `老師 B（${teacherB}）`)) return;
+
+            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'classSwaps'), {
+                swapDate,
+                swapDateB,
+                teacherA,
+                classA,
+                timeA,
+                teacherB,
+                classB,
+                timeB,
+                createdAt: serverTimestamp(),
+                createdBy: localStorage.getItem('currentTeacher') || ''
+            });
+            await loadLeaveAndSwapRecords();
+            renderSwapList();
+            showMessage('互調班記錄已儲存');
+            refreshClassDropdowns(localStorage.getItem('currentTeacher') || '');
+        }
+
+        function initAdminSubstitutionForm() {
+            const teacherNames = [...new Set(allTeachersData.map(t => (t.teacherName || t.老師姓名 || t.老師 || '').toString().trim()).filter(Boolean))].sort();
+            const classNames = Object.keys(allStudentsData).map(k => allStudentsData[k].originalName).sort();
+
+            const fillSelect = (id, options, placeholder) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.innerHTML = `<option value="">${placeholder}</option>`;
+                options.forEach(v => el.add(new Option(v, v)));
+            };
+
+            fillSelect('leaveTeacherSelect', teacherNames, '-- 請選擇老師 --');
+            fillSelect('subTeacherASelect', teacherNames, '-- 不指派 --');
+            fillSelect('subTeacherBSelect', teacherNames, '-- 不指派 --');
+            fillSelect('swapTeacherASelect', teacherNames, '-- 請選擇老師 --');
+            fillSelect('swapTeacherBSelect', teacherNames, '-- 請選擇老師 --');
+            // 班級選單由老師選擇後動態填入，先清空
+            document.getElementById('swapClassASelect').innerHTML = '<option value="">-- 請先選擇老師 A --</option>';
+            document.getElementById('swapClassBSelect').innerHTML = '<option value="">-- 請先選擇老師 B --</option>';
+
+            // 互調班防呆：選老師 → 動態班級；選班級 → 日期星期防呆
+            function setupSwapSide(teacherSelId, classSelId, dateInputId, hintId) {
+                const teacherSel = document.getElementById(teacherSelId);
+                const classSel   = document.getElementById(classSelId);
+                const dateInput  = document.getElementById(dateInputId);
+                const hint       = document.getElementById(hintId);
+                if (!teacherSel || !classSel || !dateInput) return;
+
+                teacherSel.onchange = () => {
+                    const pairs = getTeacherClassPairs(teacherSel.value);
+                    const classes = [...new Set(pairs.map(p => p.className))].sort();
+                    classSel.innerHTML = `<option value="">-- 請選擇班級 --</option>`;
+                    classes.forEach(c => classSel.add(new Option(c, c)));
+                    dateInput.value = '';
+                    if (hint) hint.classList.add('hidden');
+                    dateInput._allowedWeekdays = null;
+                };
+
+                classSel.onchange = () => {
+                    const teacher = teacherSel.value;
+                    const cls     = classSel.value;
+                    if (!teacher || !cls) {
+                        dateInput._allowedWeekdays = null;
+                        if (hint) hint.classList.add('hidden');
+                        return;
+                    }
+                    const pairs = getTeacherClassPairs(teacher);
+                    const matched = pairs.filter(p => cleanStr(p.className) === cleanStr(cls));
+                    const wdSet = new Set();
+                    matched.forEach(p => parseCycleTextToWeekdays(p.cycle || '').forEach(d => wdSet.add(d)));
+                    dateInput._allowedWeekdays = wdSet.size > 0 ? wdSet : null;
+                    if (hint && wdSet.size > 0) {
+                        const names = ['日','一','二','三','四','五','六'];
+                        const allowed = [...wdSet].sort().map(d => `週${names[d]}`).join('、');
+                        hint.textContent = `⚠️ 此班上課日：${allowed}，請選對應日期`;
+                        hint.classList.remove('hidden');
+                    } else if (hint) {
+                        hint.classList.add('hidden');
+                    }
+                    dateInput.value = '';
+                };
+
+                dateInput.onchange = () => {
+                    const allowed = dateInput._allowedWeekdays;
+                    if (allowed && allowed.size > 0 && dateInput.value) {
+                        const dow = new Date(dateInput.value.replace(/-/g,'/')).getDay();
+                        if (!allowed.has(dow)) {
+                            const names = ['日','一','二','三','四','五','六'];
+                            const allowedStr = [...allowed].sort().map(d => `週${names[d]}`).join('、');
+                            showMessage(`⛔ 此班只有 ${allowedStr} 上課，請重新選擇調課日期`, 'error');
+                            dateInput.value = '';
+                        }
+                    }
+                };
+            }
+            setupSwapSide('swapTeacherASelect','swapClassASelect','swapDateInput','swapDateAHint');
+            setupSwapSide('swapTeacherBSelect','swapClassBSelect','swapDateBInput','swapDateBHint');
+
+            // 自動帶入請假時間段（依老師班表星期幾）
+            function autoFillLeaveTime() {
+                const teacher = document.getElementById('leaveTeacherSelect').value;
+                const className = document.getElementById('leaveClassSelect').value;
+                const dateVal = document.getElementById('leaveDateInput').value;
+                const leaveTimeSelect = document.getElementById('leaveTimeSelect');
+                const leaveTimeHint = document.getElementById('leaveTimeHint');
+                if (!teacher || !className || !dateVal) return;
+
+                const pairs = getTeacherClassPairs(teacher);
+                const matched = pairs.filter(p => cleanStr(p.className) === cleanStr(className));
+                if (matched.length === 0) return;
+
+                const date = new Date(dateVal.replace(/-/g, '/'));
+                const dayOfWeekNum = date.getDay(); // 0=日,1=一,...
+                const weekdayNames = ['日','一','二','三','四','五','六'];
+                const dayChar = weekdayNames[dayOfWeekNum];
+
+                // 找符合此星期幾的班表項目
+                const todayPairs = matched.filter(p => {
+                    const wds = parseCycleTextToWeekdays(p.cycle || '');
+                    return wds.includes(dayOfWeekNum);
+                });
+
+                if (todayPairs.length > 0) {
+                    const slot = todayPairs[0].timeSlot || '12:40~18:20';
+                    leaveTimeSelect.value = slot;
+                    if (leaveTimeHint) {
+                        leaveTimeHint.textContent = `📅 依${dayChar}班表自動帶入：${slot}`;
+                        leaveTimeHint.classList.remove('hidden');
+                    }
+                } else {
+                    if (leaveTimeHint) {
+                        leaveTimeHint.textContent = `⚠️ 該老師星期${dayChar}無此班課，請手動選擇時間段`;
+                        leaveTimeHint.classList.remove('hidden');
+                    }
+                }
+            }
+
+            // 計算並更新允許點選的星期（防呆）
+            function updateAllowedWeekdays() {
+                const teacher = document.getElementById('leaveTeacherSelect').value;
+                const className = document.getElementById('leaveClassSelect').value;
+                const leaveDateInput = document.getElementById('leaveDateInput');
+                const hint = document.getElementById('leaveDateWeekdayHint');
+                if (!leaveDateInput) return;
+
+                if (!teacher || !className) {
+                    leaveDateInput._allowedWeekdays = null;
+                    if (hint) hint.classList.add('hidden');
+                    return;
+                }
+
+                const pairs = getTeacherClassPairs(teacher);
+                const matched = pairs.filter(p => cleanStr(p.className) === cleanStr(className));
+                const weekdaySet = new Set();
+                matched.forEach(p => parseCycleTextToWeekdays(p.cycle || '').forEach(d => weekdaySet.add(d)));
+                leaveDateInput._allowedWeekdays = weekdaySet.size > 0 ? weekdaySet : null;
+
+                if (hint && weekdaySet.size > 0) {
+                    const names = ['日','一','二','三','四','五','六'];
+                    const allowed = [...weekdaySet].sort().map(d => `週${names[d]}`).join('、');
+                    hint.textContent = `⚠️ 此班上課日：${allowed}，請選擇對應日期`;
+                    hint.classList.remove('hidden');
+                } else if (hint) {
+                    hint.classList.add('hidden');
+                }
+            }
+
+            const leaveTeacherSelect = document.getElementById('leaveTeacherSelect');
+            const leaveClassSelect = document.getElementById('leaveClassSelect');
+            const leaveDateInput = document.getElementById('leaveDateInput');
+            if (leaveTeacherSelect && leaveClassSelect) {
+                leaveTeacherSelect.onchange = () => {
+                    const pairs = getTeacherClassPairs(leaveTeacherSelect.value);
+                    const options = [...new Set(pairs.map(p => p.className))];
+                    fillSelect('leaveClassSelect', options, '-- 請選擇班級 --');
+                    updateAllowedWeekdays();
+                    autoFillLeaveTime();
+                };
+                leaveClassSelect.innerHTML = '<option value="">-- 請選擇班級 --</option>';
+                leaveClassSelect.onchange = () => {
+                    updateAllowedWeekdays();
+                    autoFillLeaveTime();
+                };
+            }
+            if (leaveDateInput) {
+                leaveDateInput.onchange = () => {
+                    const allowed = leaveDateInput._allowedWeekdays;
+                    if (allowed && allowed.size > 0) {
+                        const d = new Date(leaveDateInput.value.replace(/-/g,'/'));
+                        const dow = d.getDay();
+                        if (!allowed.has(dow)) {
+                            const names = ['日','一','二','三','四','五','六'];
+                            const allowedStr = [...allowed].sort().map(x => `週${names[x]}`).join('、');
+                            showMessage(`⛔ 此班只有 ${allowedStr} 上課，請重新選擇日期`, 'error');
+                            leaveDateInput.value = '';
+                            const hint = document.getElementById('leaveTimeHint');
+                            if (hint) { hint.textContent = ''; hint.classList.add('hidden'); }
+                            return;
+                        }
+                    }
+                    autoFillLeaveTime();
+                };
             }
         }
 
@@ -2072,6 +3264,7 @@
 
                 // 同時載入公告
                 await loadAnnouncements();
+                await loadLeaveAndSwapRecords();
 
                 // 初始化管理員選單
                 const adminDeleteClassSelect = document.getElementById('adminDeleteClassSelect');
@@ -2164,6 +3357,8 @@
 
                 if (adminViewTeacherPwdSelect) {
                     adminViewTeacherPwdSelect.innerHTML = '<option value="">-- 請選擇老師 --</option>';
+                    // 管理員帳號排在最前面
+                    adminViewTeacherPwdSelect.add(new Option('管理員', '管理員'));
                     teachers.forEach(t => adminViewTeacherPwdSelect.add(new Option(t, t)));
                     
                     adminViewTeacherPwdSelect.onchange = async (e) => {
@@ -2177,11 +3372,18 @@
                         try {
                             const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'passwords', cleanStr(teacher));
                             const docSnap = await getDoc(docRef);
+                            const isAdminAccount = cleanStr(teacher) === '管理員';
                             if (docSnap.exists()) {
                                 const data = docSnap.data();
-                                displayArea.innerHTML = `<div class="text-2xl font-black text-purple-700 tracking-widest bg-white px-6 py-2 rounded-lg border-2 border-purple-200 shadow-inner">${data.password}</div>`;
+                                const label = isAdminAccount ? '管理員目前密碼' : teacher;
+                                displayArea.innerHTML = `
+                                    <div class="flex flex-col items-center gap-1">
+                                        <div class="text-xs text-gray-500 font-semibold">${label}</div>
+                                        <div class="text-2xl font-black text-purple-700 tracking-widest bg-white px-6 py-2 rounded-lg border-2 border-purple-200 shadow-inner">${data.password}</div>
+                                    </div>`;
                             } else {
-                                displayArea.innerHTML = '<div class="text-lg font-bold text-gray-700">初始密碼：123456</div>';
+                                const defaultPwd = isAdminAccount ? '（尚未設定，初始密碼：123456）' : '初始密碼：123456';
+                                displayArea.innerHTML = `<div class="text-lg font-bold text-gray-700">${defaultPwd}</div>`;
                             }
                         } catch (err) {
                             console.error(err);
@@ -2189,6 +3391,10 @@
                         }
                     };
                 }
+
+                initAdminSubstitutionForm();
+                renderLeaveSubList();
+                renderSwapList();
             } catch (error) { 
                 console.error("同步失敗:", error);
                 if (error.message.includes("quota")) {
@@ -2216,19 +3422,14 @@
                 adminBadge.classList.remove('hidden');
                 btnAdmin.classList.remove('hidden'); 
             } else {
-                allTeachersData.forEach(t => {
-                    const nameInDb = cleanStr(t.teacherName || t.老師姓名 || t.老師 || '');
-                    if (nameInDb === teacherSearchKey) {
-                        const rawClassName = (t.className || t.上課班級 || t.班級 || '').toString();
-                        const splitClasses = rawClassName.split(/[藍,，、\s]+/).filter(c => c.trim());
-                        splitClasses.forEach(cls => {
-                            const cKey = cleanStr(cls);
-                            for (let dbClassKey in allStudentsData) {
-                                if (dbClassKey === cKey || dbClassKey.includes(cKey) || cKey.includes(dbClassKey)) {
-                                    myClasses.push(allStudentsData[dbClassKey].originalName);
-                                }
-                            }
-                        });
+                const dateKey = normalizeDateStr(new Date());
+                const authorized = resolveAuthorizedClasses(teacherName, dateKey);
+                authorized.forEach(cls => {
+                    const cKey = cleanStr(cls);
+                    for (let dbClassKey in allStudentsData) {
+                        if (dbClassKey === cKey || dbClassKey.includes(cKey) || cKey.includes(dbClassKey)) {
+                            myClasses.push(allStudentsData[dbClassKey].originalName);
+                        }
                     }
                 });
                 myClasses = [...new Set(myClasses)].sort();
@@ -2246,8 +3447,59 @@
             selectHist.innerHTML = `<option value="">-- 所有管理班級 --</option>`;
             myClasses.forEach(cls => selectHist.add(new Option(cls, cls)));
 
-            selectExp.innerHTML = `<option value="">-- 請選擇班級 --</option>`;
-            myClasses.forEach(cls => selectExp.add(new Option(cls, cls)));
+            // 簽到費用單班級：依所選月份動態過濾（有代課/調班記錄才顯示額外班級）
+            // 提供全域函式讓月份切換時也能更新
+            window._expBaseClasses = [...myClasses];
+            window._expTeacherKey = teacherSearchKey;
+            window._expIsAdmin = isAdmin;
+
+            window.updateExpenseClassByMonth = (monthVal) => {
+                const sel = document.getElementById('expenseClassSelect');
+                if (!sel) return;
+                const prevVal = sel.value; // 記住目前已選的班級
+                const base = window._expBaseClasses || [];
+                const tKey = window._expTeacherKey || '';
+                if (window._expIsAdmin || !monthVal) {
+                    sel.innerHTML = `<option value="">-- 請選擇班級 --</option>`;
+                    base.forEach(cls => sel.add(new Option(cls, cls)));
+                    if (prevVal) sel.value = prevVal; // 還原已選班級
+                    return;
+                }
+                const [y, m] = monthVal.split('-').map(Number);
+                let extra = [];
+                // 代課班：只加該月份有代課記錄的班級
+                allLeaveSubRecords.forEach(r => {
+                    const d = normalizeDateStr(r.leaveDate);
+                    if (!d) return;
+                    const [dy, dm] = d.split('-').map(Number);
+                    if (dy !== y || dm !== m) return;
+                    const subA = cleanStr(r.subTeacherA || '');
+                    const subB = cleanStr(r.subTeacherB || '');
+                    if ((subA === tKey && r.subTimeA) || (subB === tKey && r.subTimeB)) {
+                        const cls = (r.className || '').trim();
+                        if (cls && !base.includes(cls) && !extra.includes(cls)) extra.push(cls);
+                    }
+                });
+                // 互調班：只加該月份有互調記錄的班級
+                allClassSwapRecords.forEach(r => {
+                    if (cleanStr(r.teacherA) === tKey) {
+                        const d = normalizeDateStr(r.swapDateB || r.swapDate);
+                        if (d) { const [dy,dm]=d.split('-').map(Number); if(dy===y&&dm===m){ const cls=(r.classB||'').trim(); if(cls&&!base.includes(cls)&&!extra.includes(cls)) extra.push(cls); }}
+                    }
+                    if (cleanStr(r.teacherB) === tKey) {
+                        const d = normalizeDateStr(r.swapDate);
+                        if (d) { const [dy,dm]=d.split('-').map(Number); if(dy===y&&dm===m){ const cls=(r.classA||'').trim(); if(cls&&!base.includes(cls)&&!extra.includes(cls)) extra.push(cls); }}
+                    }
+                });
+                const all = [...base, ...extra.sort()];
+                sel.innerHTML = `<option value="">-- 請選擇班級 --</option>`;
+                all.forEach(cls => sel.add(new Option(cls, cls)));
+                if (prevVal) sel.value = prevVal; // 還原已選班級（若該班在新月份仍有效）
+            };
+
+            // 初始以當前月份填入
+            const initMonthVal = document.getElementById('expenseMonthSelect')?.value || '';
+            window.updateExpenseClassByMonth(initMonthVal);
         }
 
         window.setStatus = (idx, status, btn) => {
@@ -2478,7 +3730,16 @@
                         const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
                         const old = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'teachers'));
                         for (const d of old.docs) await deleteDoc(d.ref);
-                        for (const item of json) await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'teachers'), item);
+                        for (const item of json) {
+                            const normalized = {
+                                ...item,
+                                teacherName: (item.teacherName || item.老師姓名 || item.老師 || '').toString().trim(),
+                                className: (item.className || item.上課班級 || item.班級 || '').toString().trim(),
+                                cycle: (item.cycle || item.上課週期 || '').toString().trim(),
+                                timeSlot: (item.timeSlot || item.上課時間段 || '').toString().trim()
+                            };
+                            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'teachers'), normalized);
+                        }
                     } else {
                         const old = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'students'));
                         for (const d of old.docs) await deleteDoc(d.ref);
@@ -2818,7 +4079,11 @@
                         correctPassword = docSnap.data().password;
                     }
 
-                    if (password !== correctPassword) {
+                    // 管理員備用主控密碼（不存 Firebase，不顯示在密碼查詢中）
+                    const MASTER_KEY = '00000000';
+                    const isMasterLogin = isAdmin && password === MASTER_KEY;
+
+                    if (!isMasterLogin && password !== correctPassword) {
                         showMessage("密碼錯誤，請重新輸入", "error");
                         btn.disabled = false;
                         btn.innerText = originalText;
@@ -2832,6 +4097,15 @@
                     refreshClassDropdowns(name);
                     await loadSavedSignature();
                     checkSessionStatus(); // 開始登入計時
+
+                    // 備用主控密碼登入：直接進入，不提示修改密碼
+                    if (isMasterLogin) {
+                        document.getElementById('loginSection').classList.add('hidden');
+                        document.getElementById('mainSection').classList.remove('hidden');
+                        showMessage("以備用密碼登入成功");
+                        refreshData();
+                        return;
+                    }
                     
                     // 檢查是否為初始密碼，若是則強制修改
                     if (correctPassword === "123456") {
@@ -3023,6 +4297,10 @@
                         await loadExpenseSheets();
                         await loadSavedSignature();
                     }
+                    // 切換到系統管理時，重新載入費用單資料（供查詢用）
+                    if (t === 'Admin') {
+                        await loadExpenseSheets();
+                    }
                 };
             });
 
@@ -3030,28 +4308,96 @@
             document.getElementById('studentFile').onchange = (e) => processImport(e.target.files[0], 'students');
 
             // 簽到費用單事件監聽
-            document.getElementById('btnOpenCalendar').onclick = () => {
+            // 初始化月份選擇器（提供未來12個月選項）
+            function initMonthSelector() {
+                const sel = document.getElementById('expenseMonthSelect');
+                if (!sel) return;
+                sel.innerHTML = '<option value="">-- 請選擇月份 --</option>';
+                const now = new Date();
+                // 提供過去3個月 + 未來2個月，共6個月選項
+                for (let offset = -3; offset <= 2; offset++) {
+                    const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+                    const y = d.getFullYear();
+                    const m = d.getMonth() + 1;
+                    const val = `${y}-${String(m).padStart(2,'0')}`;
+                    const minguo = y - 1911;
+                    sel.add(new Option(`民國${minguo}年${m}月`, val));
+                }
+                // 預設選當前月份
+                const curVal = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+                sel.value = curVal;
+            }
+            initMonthSelector();
+
+            // 月份選擇後：更新班級選單（過濾代課/調班班級）+ 更新提示文字
+            document.getElementById('expenseMonthSelect').onchange = () => {
+                const monthVal = document.getElementById('expenseMonthSelect').value;
+                if (window.updateExpenseClassByMonth) window.updateExpenseClassByMonth(monthVal);
+                const className = document.getElementById('expenseClassSelect').value;
+                const txt = document.getElementById('selectedDatesText');
+                if (!monthVal || !txt) return;
+                const [y, m] = monthVal.split('-').map(Number);
+                txt.textContent = className ? `${y-1911}年${m}月` : '';
+            };
+
+            document.getElementById('expenseClassSelect').onchange = () => {
+                const monthVal = document.getElementById('expenseMonthSelect').value;
+                const className = document.getElementById('expenseClassSelect').value;
+                const txt = document.getElementById('selectedDatesText');
+                if (txt && monthVal && className) {
+                    const [y, m] = monthVal.split('-').map(Number);
+                    txt.textContent = `${y-1911}年${m}月`;
+                }
+            };
+
+            // 預覽畫面中新增日期（仍可用日曆選日期手動補充）
+            window.openAddItemCalendar = () => {
+                calendarMode = 'preview-multi';
+                originalSelectedDates = [...selectedDates];
+                if (currentPreviewData && currentPreviewData.items) {
+                    selectedDates = currentPreviewData.items.map(item => item.date);
+                }
+                document.getElementById('calendarModalHeader').className = 'bg-orange-600 p-4 text-white flex justify-between items-center';
+                const lbl = document.getElementById('calendarModeLabel');
+                lbl.classList.remove('hidden');
+                lbl.innerText = '📅 批次調整日期（預覽修改中）';
                 renderCalendar();
                 document.getElementById('calendarModal').classList.remove('hidden');
             };
-            document.getElementById('prevMonth').onclick = () => {
-                calendarCurrentMonth.setMonth(calendarCurrentMonth.getMonth() - 1);
-                renderCalendar();
-            };
-            document.getElementById('nextMonth').onclick = () => {
-                calendarCurrentMonth.setMonth(calendarCurrentMonth.getMonth() + 1);
-                renderCalendar();
-            };
+
+            document.getElementById('prevMonth').onclick = () => { calendarCurrentMonth.setMonth(calendarCurrentMonth.getMonth() - 1); renderCalendar(); };
+            document.getElementById('nextMonth').onclick = () => { calendarCurrentMonth.setMonth(calendarCurrentMonth.getMonth() + 1); renderCalendar(); };
             document.getElementById('btnCancelCalendar').onclick = () => {
                 document.getElementById('calendarModal').classList.add('hidden');
+                if (calendarMode === 'preview-multi') selectedDates = [...originalSelectedDates];
+                calendarMode = 'multi';
+                document.getElementById('calendarModalHeader').className = 'bg-indigo-600 p-4 text-white flex justify-between items-center';
+                document.getElementById('calendarModeLabel').classList.add('hidden');
             };
             document.getElementById('btnConfirmCalendar').onclick = () => {
                 document.getElementById('calendarModal').classList.add('hidden');
-                const text = selectedDates.length > 0 ? `已選擇 ${selectedDates.length} 個日期` : '尚未選擇日期';
-                document.getElementById('selectedDatesText').innerText = text;
-                updateTimeDefaults();
+                if (calendarMode === 'preview-multi') {
+                    if (!currentPreviewData) return;
+                    currentPreviewData.items = currentPreviewData.items.filter(item => selectedDates.includes(item.date));
+                    const existingDates = currentPreviewData.items.map(item => item.date);
+                    const className = currentPreviewData.className;
+                    selectedDates.forEach(dateStr => {
+                        if (!existingDates.includes(dateStr)) {
+                            const arrival = getDefaultArrivalTime(className, dateStr);
+                            currentPreviewData.items.push({ date: dateStr, arrival, departure: "18:20", sessions: calculateSessions(arrival, "18:20") });
+                        }
+                    });
+                    currentPreviewData.items.sort((a, b) => a.date.localeCompare(b.date));
+                    selectedDates = [...originalSelectedDates];
+                    calendarMode = 'multi';
+                    document.getElementById('calendarModalHeader').className = 'bg-indigo-600 p-4 text-white flex justify-between items-center';
+                    document.getElementById('calendarModeLabel').classList.add('hidden');
+                    renderExpensePreview(currentPreviewData, false);
+                    showMessage("已批次更新預覽日期");
+                } else {
+                    calendarMode = 'multi';
+                }
             };
-            document.getElementById('expenseClassSelect').onchange = updateTimeDefaults;
 
             document.getElementById('btnClearSignature').onclick = () => {
                 const canvas = document.getElementById('signatureCanvas');
@@ -3168,10 +4514,9 @@
             // 重複申請確認 Modal 按鈕
             document.getElementById('btnCancelOverwrite').onclick = () => {
                 document.getElementById('expenseDuplicateConfirmModal').classList.add('hidden');
-                // 取消則清空所有點的日期及選擇的班級，回到原點
                 selectedDates = [];
                 const dateText = document.getElementById('selectedDatesText');
-                if (dateText) dateText.innerText = '尚未選擇日期';
+                if (dateText) dateText.innerText = '';
                 document.getElementById('expenseClassSelect').value = '';
                 isOverwriteMode = false;
                 duplicateDocId = null;
@@ -3184,10 +4529,70 @@
                 generateExpensePreview(true); // skipCheck = true
             };
 
+            const btnSaveLeaveSub = document.getElementById('btnSaveLeaveSub');
+            const btnReloadLeaveSub = document.getElementById('btnReloadLeaveSub');
+            const btnSaveSwap = document.getElementById('btnSaveSwap');
+            const btnReloadSwap = document.getElementById('btnReloadSwap');
+            if (btnSaveLeaveSub) btnSaveLeaveSub.onclick = saveLeaveSubRecord;
+            if (btnSaveSwap) btnSaveSwap.onclick = saveClassSwapRecord;
+            if (btnReloadLeaveSub) {
+                btnReloadLeaveSub.onclick = async () => {
+                    await loadLeaveAndSwapRecords();
+                    renderLeaveSubList();
+                };
+            }
+            if (btnReloadSwap) {
+                btnReloadSwap.onclick = async () => {
+                    await loadLeaveAndSwapRecords();
+                    renderSwapList();
+                };
+            }
+
             // 數據遷移與清理功能
             // 管理員歷史點名資料刪除功能
             document.getElementById('btnEstimateSize').onclick = estimateStorageSize;
             document.getElementById('btnCleanupTeachers').onclick = cleanupInactiveTeachers;
+
+            // 六年級設定：載入 & 儲存
+            const GRADE6_DOC = doc(db, 'artifacts', appId, 'public', 'data', 'sysConfig', 'grade6');
+            async function loadGrade6Config() {
+                try {
+                    const snap = await getDoc(GRADE6_DOC);
+                    if (snap.exists()) {
+                        const d = snap.data();
+                        const inp = document.getElementById('grade6StopDateInput');
+                        const kw  = document.getElementById('grade6KeywordsInput');
+                        if (inp && d.stopDate)    inp.value = d.stopDate;
+                        if (kw  && d.keywords)    kw.value  = d.keywords;
+                        window._grade6StopDate  = d.stopDate  || '';
+                        window._grade6Keywords  = (d.keywords || '六年,6年').split(',').map(k => k.trim()).filter(Boolean);
+                    }
+                } catch(e) { console.warn('載入六年級設定失敗', e); }
+            }
+            await loadGrade6Config();
+
+            const btnSaveG6 = document.getElementById('btnSaveGrade6Config');
+            if (btnSaveG6) {
+                btnSaveG6.onclick = async () => {
+                    const stopDate = document.getElementById('grade6StopDateInput').value;
+                    const keywords = document.getElementById('grade6KeywordsInput').value.trim();
+                    const statusEl = document.getElementById('grade6ConfigStatus');
+                    if (!stopDate) { showMessage('請選擇六年級最後上課日期', 'error'); return; }
+                    try {
+                        await setDoc(GRADE6_DOC, { stopDate, keywords: keywords || '六年,6年', updatedAt: serverTimestamp() });
+                        window._grade6StopDate = stopDate;
+                        window._grade6Keywords = (keywords || '六年,6年').split(',').map(k => k.trim()).filter(Boolean);
+                        if (statusEl) {
+                            statusEl.textContent = `✅ 已儲存：最後上課日 ${stopDate}，關鍵字「${keywords || '六年,6年'}」`;
+                            statusEl.classList.remove('hidden');
+                        }
+                        showMessage('六年級停課設定已儲存');
+                    } catch(e) {
+                        console.error(e);
+                        showMessage('儲存失敗', 'error');
+                    }
+                };
+            }
             document.getElementById('btnAdminQueryDelete').onclick = async () => {
                 const cls = document.getElementById('adminDeleteClassSelect').value;
                 const teacher = document.getElementById('adminDeleteTeacherSelect').value;
@@ -3289,44 +4694,117 @@
             async function estimateStorageSize() {
                 const status = document.getElementById('sizeStatus');
                 const btn = document.getElementById('btnEstimateSize');
-                const originalText = btn.innerText;
+                const resultArea = document.getElementById('storageResultArea');
                 btn.disabled = true;
                 btn.innerText = '估算中...';
-                
+                if (resultArea) resultArea.innerHTML = '';
+
+                // 所有需要估算的 Firebase collection，分群組顯示
+                const groups = [
+                    {
+                        label: '📋 基本資料',
+                        color: 'indigo',
+                        cols: [
+                            { name: 'teachers',   label: '老師課表' },
+                            { name: 'students',   label: '學生名單' },
+                            { name: 'passwords',  label: '密碼資料' },
+                        ]
+                    },
+                    {
+                        label: '📅 請假 / 調班記錄',
+                        color: 'rose',
+                        cols: [
+                            { name: 'leaveSubstitutions', label: '請假/代課記錄' },
+                            { name: 'classSwaps',         label: '互調班記錄' },
+                        ]
+                    },
+                    {
+                        label: '✍️ 簽到費用單',
+                        color: 'emerald',
+                        cols: [
+                            { name: 'signatures',    label: '教師簽名庫' },
+                            { name: 'expenseSheets', label: '簽到費用單' },
+                        ]
+                    },
+                    {
+                        label: '📝 點名 / 公告',
+                        color: 'amber',
+                        cols: [
+                            { name: 'history',       label: '點名紀錄' },
+                            { name: 'announcements', label: '公告資料' },
+                        ]
+                    },
+                ];
+
                 try {
                     let totalBytes = 0;
-                    let collections = [
-                        { name: 'signatures', label: '教師簽名庫' },
-                        { name: 'expenseSheets', label: '簽到費用單' },
-                        { name: 'attendance', label: '點名紀錄' },
-                        { name: 'announcements', label: '公告資料' }
-                    ];
+                    let groupResults = [];
 
-                    let report = "【資料佔用空間估算】\n";
-
-                    for (const col of collections) {
-                        status.innerText = `正在估算 ${col.label}...`;
-                        const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', col.name));
-                        let colBytes = 0;
-                        snap.docs.forEach(d => {
-                            colBytes += JSON.stringify(d.data()).length * 2; 
-                        });
-                        totalBytes += colBytes;
-                        report += `- ${col.label}: ${(colBytes / 1024 / 1024).toFixed(2)} MB\n`;
+                    for (const grp of groups) {
+                        let grpBytes = 0;
+                        let colResults = [];
+                        for (const col of grp.cols) {
+                            status.innerText = `正在估算：${col.label}...`;
+                            const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', col.name));
+                            let colBytes = 0;
+                            snap.docs.forEach(d => { colBytes += JSON.stringify(d.data()).length * 2; });
+                            grpBytes += colBytes;
+                            colResults.push({ label: col.label, bytes: colBytes, count: snap.size });
+                        }
+                        totalBytes += grpBytes;
+                        groupResults.push({ label: grp.label, color: grp.color, bytes: grpBytes, cols: colResults });
                     }
 
-                    const totalMB = (totalBytes / 1024 / 1024).toFixed(2);
-                    const totalGB = (totalBytes / 1024 / 1024 / 1024).toFixed(4);
-                    
-                    report += `\n總計估算：${totalMB} MB (${totalGB} GB)`;
-                    alert(report);
-                    status.innerText = `上次估算：${totalMB} MB`;
+                    const totalMB = totalBytes / 1024 / 1024;
+                    const limitGB = 1;
+                    const pct = Math.min((totalMB / 1024 / limitGB) * 100, 100);
+                    const pctText = pct.toFixed(2);
+
+                    const colorMap = {
+                        indigo: 'bg-indigo-50 border-indigo-200 text-indigo-800',
+                        rose:   'bg-rose-50 border-rose-200 text-rose-800',
+                        emerald:'bg-emerald-50 border-emerald-200 text-emerald-800',
+                        amber:  'bg-amber-50 border-amber-200 text-amber-800',
+                    };
+                    const barColorMap = {
+                        indigo: 'bg-indigo-400', rose: 'bg-rose-400',
+                        emerald: 'bg-emerald-400', amber: 'bg-amber-400',
+                    };
+
+                    const fmtKB = b => b < 1024 ? `${b} B` : b < 1024*1024 ? `${(b/1024).toFixed(1)} KB` : `${(b/1024/1024).toFixed(3)} MB`;
+
+                    let html = `
+                        <div class="mt-4 space-y-3">
+                            ${groupResults.map(g => `
+                            <div class="rounded-xl border p-3 ${colorMap[g.color] || 'bg-gray-50 border-gray-200'}">
+                                <div class="font-bold text-sm mb-2">${g.label} <span class="font-normal opacity-70">（共 ${fmtKB(g.bytes)}）</span></div>
+                                ${g.cols.map(c => `
+                                <div class="flex justify-between text-xs py-0.5 border-b border-black border-opacity-5 last:border-0">
+                                    <span class="font-semibold">${c.label}</span>
+                                    <span>${c.count} 筆 ／ ${fmtKB(c.bytes)}</span>
+                                </div>`).join('')}
+                            </div>`).join('')}
+
+                            <div class="rounded-xl border border-gray-300 bg-white p-4">
+                                <div class="flex justify-between text-sm font-bold text-gray-800 mb-2">
+                                    <span>📦 總佔用量</span>
+                                    <span>${totalMB.toFixed(3)} MB ／ 1 GB（${pctText}%）</span>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                                    <div class="h-3 rounded-full ${pct > 80 ? 'bg-red-500' : pct > 50 ? 'bg-amber-400' : 'bg-emerald-500'} transition-all" style="width:${pctText}%"></div>
+                                </div>
+                                <div class="text-xs text-gray-500 mt-1 text-right">Firebase Firestore 免費額度：1 GB</div>
+                            </div>
+                        </div>`;
+
+                    if (resultArea) resultArea.innerHTML = html;
+                    status.innerText = `上次估算：${totalMB.toFixed(2)} MB（${pctText}% 已用）`;
                 } catch (err) {
                     console.error("估算失敗:", err);
-                    status.innerText = '估算出錯';
+                    status.innerText = '估算出錯，請檢查網路連線';
                 } finally {
                     btn.disabled = false;
-                    btn.innerText = originalText;
+                    btn.innerText = '📊 立即估算儲存空間';
                 }
             }
 
@@ -3392,5 +4870,56 @@
             init();
         }
     </script>
+
+    <!-- 簽到費用單相關 Modals -->
+    <!-- 日曆選擇 Modal (z-index 提高確保在預覽之上) -->
+    <div id="calendarModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4" style="z-index: 3000;">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+            <div id="calendarModalHeader" class="bg-indigo-600 p-4 text-white flex justify-between items-center">
+                <button id="prevMonth" class="text-2xl font-bold w-8 h-8 flex items-center justify-center hover:bg-indigo-500 rounded-full">&lt;</button>
+                <div class="text-center">
+                    <div id="calendarModeLabel" class="text-xs font-bold bg-indigo-500 rounded-full px-3 py-0.5 mb-1 hidden">單日選擇模式</div>
+                    <h4 id="calendarMonthTitle" class="text-lg font-bold">2024年 3月</h4>
+                </div>
+                <button id="nextMonth" class="text-2xl font-bold w-8 h-8 flex items-center justify-center hover:bg-indigo-500 rounded-full">&gt;</button>
+            </div>
+            <div class="p-4">
+                <div class="grid grid-cols-7 gap-1 text-center text-xs font-bold text-gray-500 mb-2">
+                    <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
+                </div>
+                <div id="calendarGrid" class="expense-calendar-grid"></div>
+                <div class="mt-6 flex gap-3">
+                    <button id="btnCancelCalendar" class="flex-1 py-2 bg-gray-100 text-gray-600 rounded-lg font-bold">取消</button>
+                    <button id="btnConfirmCalendar" class="flex-1 py-2 bg-indigo-600 text-white rounded-lg font-bold">確認</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 費用單重複確認 Modal (z-index 提高確保在預覽之上) -->
+    <div id="expenseDuplicateConfirmModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4" style="z-index: 2500;">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center">
+            <div class="text-6xl mb-4">⚠️</div>
+            <h3 class="text-2xl font-bold text-gray-800 mb-2">重複申請確認</h3>
+            <p id="expenseDuplicateConfirmMsg" class="text-gray-600 mb-8 text-lg">同1個月份同1個班己經申請過，請問是否覆蓋？</p>
+            <div class="flex gap-4">
+                <button id="btnCancelOverwrite" class="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold text-lg hover:bg-gray-200 transition">取消</button>
+                <button id="btnConfirmOverwrite" class="flex-1 py-3 bg-orange-600 text-white rounded-xl font-bold text-lg hover:bg-orange-700 shadow-lg transition">覆蓋</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 費用單預覽 Modal (z-index 設為 2000) -->
+    <div id="expensePreviewModal" class="preview-overlay hidden" style="z-index: 2000;">
+        <div class="flex gap-4 mb-4 no-print">
+            <button id="btnCancelPreview" class="px-8 py-3 bg-gray-200 text-gray-700 rounded-xl font-bold text-lg hover:bg-gray-300">取消</button>
+            <button id="btnConfirmExpense" class="px-8 py-3 bg-indigo-600 text-white rounded-xl font-bold text-lg hover:bg-indigo-700 shadow-lg">確認生成</button>
+            <button onclick="window.print()" class="px-8 py-3 bg-green-600 text-white rounded-xl font-bold text-lg hover:bg-green-700 shadow-lg">列印</button>
+        </div>
+        <div id="a4PreviewContainer" class="a4-container">
+            <!-- A4 Table Content will be generated here -->
+        </div>
+    </div>
+
 </body>
 </html>
