@@ -967,7 +967,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc, collection, query, getDocs, addDoc, serverTimestamp, deleteDoc, where, orderBy, limit, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { getStorage, ref, uploadString, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+        // Firebase Storage 已移除，公告附件改存 Firestore (Base64)
 
         // Firebase Configuration (保持原樣)
         const firebaseConfig = {
@@ -982,14 +982,13 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const storage = getStorage(app);
+        // Firebase Storage 已移除：公告附件改以 Base64 直接存入 Firestore
         
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'cn-ams-school';
 
         // 將 Firebase 方法導出到 window 供傳統腳本使用
         window.db = db;
         window.auth = auth;
-        window.storage = storage;
         window.collection = collection;
         window.addDoc = addDoc;
         window.getDocs = getDocs;
@@ -1006,11 +1005,6 @@
         window.signInAnonymously = signInAnonymously;
         window.onAuthStateChanged = onAuthStateChanged;
         window.signInWithCustomToken = signInWithCustomToken;
-        window.ref = ref;
-        window.uploadString = uploadString;
-        window.uploadBytes = uploadBytes;
-        window.getDownloadURL = getDownloadURL;
-        window.deleteObject = deleteObject;
 
         let user = null;
         let allTeachersData = [];
@@ -1242,13 +1236,13 @@
             }
             area.innerHTML = allAnnouncements.map((a, idx) => {
                 const dateStr = a.createdAt ? new Date(a.createdAt.seconds * 1000).toLocaleDateString('zh-TW') : '';
-                const hasStorage = !!a.storagePath;
+                const hasData = !!(a.fileData || a.fileUrl);
                 return `
                     <div class="flex items-center justify-between bg-gray-50 p-2 rounded-lg border text-xs">
                         <div class="flex-1 truncate">
                             <span class="font-bold text-gray-700">${a.title || '未命名'}</span>
                             <span class="text-gray-400 ml-2">${dateStr}</span>
-                            ${hasStorage ? '<span class="text-[10px] bg-indigo-100 text-indigo-600 px-1 rounded ml-1">Cloud</span>' : ''}
+                            ${hasData ? '<span class="text-[10px] bg-emerald-100 text-emerald-600 px-1 rounded ml-1">Firestore</span>' : ''}
                         </div>
                         <button onclick="deleteAnnouncement('${a.id}', event)" class="text-red-500 hover:text-red-700 font-bold ml-2 px-2 py-1 rounded hover:bg-red-50 transition">刪除</button>
                     </div>
@@ -1295,27 +1289,12 @@
             document.getElementById('announcementModal').classList.add('hidden');
         };
 
-        // 刪除公告
+        // 刪除公告（附件已存 Firestore，直接刪除文件即可）
         window.deleteAnnouncement = async (docId, event) => {
             if (event) event.stopPropagation();
             if (!confirm('確定要刪除此公告嗎？')) return;
             try {
-                // 先查找該公告以獲取 Storage 路徑
                 const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'announcements', docId);
-                const docSnap = await getDoc(docRef);
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    // 如果有 Storage 路徑，則先從 Storage 刪除檔案
-                    if (data.storagePath) {
-                        try {
-                            const storageRef = ref(storage, data.storagePath);
-                            await deleteObject(storageRef);
-                        } catch (storageErr) {
-                            console.warn("從 Storage 刪除檔案失敗 (可能檔案已不存在):", storageErr);
-                        }
-                    }
-                }
-                
                 await deleteDoc(docRef);
                 showMessage('公告已刪除');
                 await loadAnnouncements();
@@ -3849,9 +3828,10 @@ window.addEventListener('load', function() {
                 e.target.value = '';
                 return;
             }
-            // 檢查檔案大小（限制 5MB，因為 Firestore 文件大小限制）
-            if (file.size > 5 * 1024 * 1024) {
-                showMessage('檔案大小不可超過 5MB', 'error');
+            // 檢查檔案大小：附件以 Base64 存 Firestore，原始檔需 ≤ 700KB
+            // (Base64 編碼後約膨脹 33%，700KB × 1.33 ≈ 930KB，安全低於 Firestore 1MB 文件限制)
+            if (file.size > 700 * 1024) {
+                showMessage('檔案大小不可超過 700KB（因直接存入 Firestore 的限制）', 'error');
                 e.target.value = '';
                 return;
             }
@@ -3879,25 +3859,23 @@ window.addEventListener('load', function() {
             btn.innerText = '上傳中...';
             btn.disabled = true;
             try {
-                // 上傳到 Firebase Storage 以節省 Firestore 空間
-                const timestamp = Date.now();
-                const safeFileName = pendingAnnouncementFile.name.replace(/[^a-zA-Z0-9.]/g, '_');
-                const storagePath = `announcements/${timestamp}_${safeFileName}`;
-                const storageRef = ref(storage, storagePath);
-                
-                const snapshot = await uploadBytes(storageRef, pendingAnnouncementFile);
-                const downloadURL = await getDownloadURL(snapshot.ref);
+                // 將附件轉為 Base64 直接存入 Firestore（已移除 Firebase Storage）
+                const base64Data = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result); // 含 data:...;base64,... 前綴
+                    reader.onerror = () => reject(new Error('檔案讀取失敗'));
+                    reader.readAsDataURL(pendingAnnouncementFile);
+                });
 
                 await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'announcements'), {
                     title: title,
                     fileName: pendingAnnouncementFile.name,
                     fileType: pendingAnnouncementFile.type,
-                    fileUrl: downloadURL, // 改存 URL
-                    storagePath: storagePath, // 存路徑方便以後刪除
+                    fileData: base64Data, // Base64 直接存入 Firestore
                     createdAt: serverTimestamp(),
                     uploadedBy: localStorage.getItem('currentTeacher') || '管理員'
                 });
-                showMessage('公告上傳成功 (已存儲至雲端磁碟)');
+                showMessage('公告上傳成功 (已存入 Firestore)');
                 pendingAnnouncementFile = null;
                 document.getElementById('announcementFile').value = '';
                 document.getElementById('announcementUploadInfo').innerHTML = '';
