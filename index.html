@@ -2928,25 +2928,36 @@ window.addEventListener('load', function() {
                 const sameDayPairs = pairs.filter(p =>
                     parseCycleTextToWeekdays(p.cycle || '').includes(leaveDow)
                 );
-                // 全天請假（12:40~18:20）：班表有任何一段（全天/上半/下半）都算衝突
+                // 判斷兩個時段是否真正重疊
+                // 時段格式：'12:40~18:20' / '12:40~16:00' / '16:00~18:20'
                 const FULL_DAY   = '12:40~18:20';
                 const MORNING    = '12:40~16:00';
                 const AFTERNOON  = '16:00~18:20';
-                const fullDaySlots = new Set([FULL_DAY, MORNING, AFTERNOON]);
+
+                const parseMinutes = (t) => {
+                    const [h, m] = t.split(':').map(Number);
+                    return h * 60 + m;
+                };
+                const slotsOverlap = (slotA, slotB) => {
+                    // 完全相同必定重疊
+                    if (slotA === slotB) return true;
+                    // 其中一個是全天，另一個是任意有效時段 → 重疊
+                    if (slotA === FULL_DAY || slotB === FULL_DAY) return true;
+                    // 上午(12:40~16:00) 與 下午(16:00~18:20) → 僅共享邊界點，不算重疊
+                    const pairSet = new Set([slotA, slotB]);
+                    if (pairSet.has(MORNING) && pairSet.has(AFTERNOON)) return false;
+                    // 其他情況依時間區間判斷（開始 < 對方結束 且 結束 > 對方開始）
+                    const [aStart, aEnd] = slotA.split('~').map(parseMinutes);
+                    const [bStart, bEnd] = slotB.split('~').map(parseMinutes);
+                    return aStart < bEnd && aEnd > bStart;
+                };
 
                 for (const p of sameDayPairs) {
                     const schedSlot = (p.timeSlot || '').trim();
                     if (!schedSlot) continue;
-                    let isConflict = false;
-                    if (leaveTime === FULL_DAY) {
-                        // 請假全天：班表只要有 12:40~18:20、12:40~16:00、16:00~18:20 都衝突
-                        isConflict = fullDaySlots.has(schedSlot);
-                    } else {
-                        // 其他請假時段：只有完全相同才衝突
-                        isConflict = (schedSlot === subTime);
-                    }
-                    if (isConflict) {
-                        return `⚠️ 代課老師「${subTeacher}」已有安排上課班級（${p.className}），請確認！`;
+                    // 比較「代課老師要代的時段（subTime）」與「代課老師自身班表時段（schedSlot）」是否重疊
+                    if (slotsOverlap(subTime, schedSlot)) {
+                        return `⚠️ 代課老師「${subTeacher}」在該時段已有安排上課班級（${p.className} ${schedSlot}），請確認！`;
                     }
                 }
                 return null;
