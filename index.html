@@ -1785,11 +1785,34 @@
             return null;
         }
 
-        // 根據班級與日期判斷預設到勤時間（備援：僅在正式班表查不到對應星期時段時才使用）
+        // 依「老師請假/代課管理」記錄，查詢某老師在某班某天是否為代課老師，
+        // 若是則回傳該記錄設定的真實代課時段(subTimeA/subTimeB)。
+        // 修正重點：代課日並非該老師的正式班表日，不該套用班級名稱＋星期幾的猜測邏輯，
+        // 而是要直接採用管理員在「老師請假/代課管理」設定好的時段。
+        function getLeaveSubTimeForDate(teacherName, className, dateStr) {
+            const teacherKey = cleanStr(teacherName);
+            const classKey = cleanStr(className);
+            for (const r of allLeaveSubRecords) {
+                if (cleanStr(r.className) !== classKey) continue;
+                if (normalizeDateStr(r.leaveDate) !== dateStr) continue;
+                if (cleanStr(r.subTeacherA) === teacherKey && r.subTimeA) {
+                    const [arr, dep] = r.subTimeA.split('~');
+                    if (arr && dep) return { arrival: arr.trim(), departure: dep.trim() };
+                }
+                if (cleanStr(r.subTeacherB) === teacherKey && r.subTimeB) {
+                    const [arr, dep] = r.subTimeB.split('~');
+                    if (arr && dep) return { arrival: arr.trim(), departure: dep.trim() };
+                }
+            }
+            return null;
+        }
+
+        // 根據班級與日期判斷預設到勤時間（備援：僅在正式班表與代課記錄都查不到對應時段時才使用）
         function getDefaultArrivalTime(className, dateStr) {
             const date = new Date(dateStr.replace(/-/g, '/'));
             const dayOfWeek = date.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
             const c = cleanStr(className);
+
             
             if (['1A', '1B', '2A', '2B'].some(v => c.includes(v))) {
                 return (dayOfWeek === 2) ? "16:00" : "12:40";
@@ -2006,12 +2029,16 @@
             const dates = [...autoSelectedDates];
 
             // 依各日期的班表及調課記錄計算到勤時間
-            // 修正：優先使用該老師此班「正式班表」中，當天星期幾對應的真實時段(cycle+timeSlot)，
-            // 而不是用班級名稱關鍵字＋星期幾去猜（舊邏輯會誤判，例如把16:00~18:20的班猜成12:40~18:20）。
+            // 修正1：優先使用該老師此班「正式班表」中，當天星期幾對應的真實時段(cycle+timeSlot)。
+            // 修正2：若當天不是本班正式班表日（例如純代課日），改用「老師請假/代課管理」
+            //        記錄中設定的真實代課時段，而不是用班級名稱關鍵字＋星期幾去猜。
+            //        （舊邏輯會誤判代課日時段，導致下方「代課老師增加時段」區塊又疊加一筆
+            //          正確時段，最終產生 12:40~16:00 + 16:00~18:20 兩筆多餘費用。）
             const items = dates.map(d => {
                 const scheduled = getScheduledTimeSlotForDate(matched, d);
-                const dynamicArrival = scheduled ? scheduled.arrival : getDefaultArrivalTime(className, d);
-                const dynamicDeparture = scheduled ? scheduled.departure : "18:20";
+                const subSlot = scheduled ? null : getLeaveSubTimeForDate(teacherName, className, d);
+                const dynamicArrival = scheduled ? scheduled.arrival : (subSlot ? subSlot.arrival : getDefaultArrivalTime(className, d));
+                const dynamicDeparture = scheduled ? scheduled.departure : (subSlot ? subSlot.departure : "18:20");
                 return { date: d, arrival: dynamicArrival, departure: dynamicDeparture, sessions: calculateSessions(dynamicArrival, dynamicDeparture) };
             });
 
