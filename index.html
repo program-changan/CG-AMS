@@ -326,7 +326,8 @@
             <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center">
                 <div class="text-red-500 text-5xl mb-4">⚠️</div>
                 <h3 class="text-2xl font-bold mb-2">今天已經點過名了</h3>
-                <p class="text-gray-600 mb-8">是否要覆蓋上次的點名資料？</p>
+                <p class="text-gray-600 mb-2">是否要覆蓋上次的點名資料？</p>
+                <p id="attendanceConfirmDetail" class="text-sm text-gray-400 mb-8"></p>
                 <div class="flex gap-4">
                     <button id="btnCancelAttendanceOverlap" class="flex-1 py-3 bg-gray-200 text-gray-700 rounded-xl font-bold hover:bg-gray-300 transition">取消</button>
                     <button id="btnConfirmAttendanceOverlap" class="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition">覆蓋</button>
@@ -3857,8 +3858,20 @@ window.addEventListener('load', function() {
             reader.readAsArrayBuffer(file);
         };
 
+        let isSubmittingAttendance = false; // 防止連點/重複送出：送出處理中不再接受第二次點擊
         document.getElementById('btnSubmitAttendance').onclick = async () => {
             if (!auth.currentUser) return;
+            if (isSubmittingAttendance) return;
+            isSubmittingAttendance = true;
+            const submitBtn = document.getElementById('btnSubmitAttendance');
+            const submitBtnText = submitBtn.innerText;
+            submitBtn.disabled = true;
+            submitBtn.innerText = '提交中...';
+            const releaseSubmitLock = () => {
+                isSubmittingAttendance = false;
+                submitBtn.disabled = false;
+                submitBtn.innerText = submitBtnText;
+            };
             const className = document.getElementById('classSelect').value;
             const teacher = localStorage.getItem('currentTeacher');
             const today = new Date().toLocaleDateString('zh-TW');
@@ -3874,12 +3887,22 @@ window.addEventListener('load', function() {
                 const snap = await getDocs(q);
 
                 if (!snap.empty) {
-                    // 顯示確認 Modal
+                    // 顯示確認 Modal（並顯示上次點名的時間，方便老師判斷是否為剛剛自己送出的）
                     const modal = document.getElementById('attendanceConfirmModal');
+                    const detailEl = document.getElementById('attendanceConfirmDetail');
+                    if (detailEl) {
+                        const times = snap.docs.map(d => d.data().timestamp?.seconds).filter(Boolean).sort((a, b) => b - a);
+                        detailEl.textContent = times.length
+                            ? '上次點名時間：' + new Date(times[0] * 1000).toLocaleTimeString('zh-TW')
+                            : '';
+                    }
                     modal.classList.remove('hidden');
+                    releaseSubmitLock();
 
                     // 處理覆蓋按鈕
                     document.getElementById('btnConfirmAttendanceOverlap').onclick = async () => {
+                        if (isSubmittingAttendance) return;
+                        isSubmittingAttendance = true;
                         modal.classList.add('hidden');
                         try {
                             // 刪除所有符合條件的舊資料 (確保一併覆蓋)
@@ -3889,6 +3912,8 @@ window.addEventListener('load', function() {
                         } catch (err) {
                             console.error(err);
                             showMessage("覆蓋失敗", "error");
+                        } finally {
+                            isSubmittingAttendance = false;
                         }
                     };
 
@@ -3906,10 +3931,12 @@ window.addEventListener('load', function() {
 
                 // 若不存在重複，直接提交
                 await performAttendanceSubmit(className, teacher, today);
+                releaseSubmitLock();
 
             } catch (err) {
                 console.error(err);
                 showMessage("檢查重複失敗", "error");
+                releaseSubmitLock();
             }
         };
 
